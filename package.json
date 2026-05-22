@@ -37,7 +37,7 @@
 
   "win": {
     "target": "nsis",
-    "icon": "build/Ca.ico"
+    "icon": "build/icon.ico"
   },
 
   "publish": {
