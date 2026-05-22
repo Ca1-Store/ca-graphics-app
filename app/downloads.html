@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>CA Store - Downloads</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* ── Download Card ── */
+        .dl-card {
+            background: rgba(18,22,31,0.88);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 24px;
+            padding: 28px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dl-card::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #4f8cff, #7c5cff, transparent);
+            border-radius: 2px 2px 0 0;
+        }
+
+        /* ── Header ── */
+        .dl-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .dl-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(79,140,255,0.2), rgba(124,92,255,0.15));
+            border: 1px solid rgba(79,140,255,0.2);
+            color: #7cb0ff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .dl-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .dl-status {
+            font-size: 12px;
+            font-weight: 600;
+            color: #7cb0ff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dl-status-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: #4f8cff;
+            animation: pulse-dot 1.4s ease infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%,100% { opacity:1; transform:scale(1); }
+            50% { opacity:0.4; transform:scale(0.7); }
+        }
+
+        /* ── Progress Bar ── */
+        .progress-wrap { margin-bottom: 16px; }
+
+        .progress-track {
+            width: 100%;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.06);
+            overflow: hidden;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #4f8cff, #7c5cff);
+            transition: width 0.2s ease;
+            position: relative;
+        }
+
+        .progress-fill::after {
+            content: "";
+            position: absolute;
+            top: 0; right: 0;
+            width: 60px; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+            animation: shimmer 1.5s ease infinite;
+        }
+
+        @keyframes shimmer {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .dl-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dl-percent {
+            font-size: 28px;
+            font-weight: 800;
+            color: #fff;
+            font-family: 'Syne', sans-serif;
+            letter-spacing: -0.02em;
+        }
+
+        .dl-right-info {
+            text-align: right;
+        }
+
+        .dl-speed {
+            font-size: 13px;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 2px;
+        }
+
+        .dl-size {
+            font-size: 11px;
+            color: rgba(255,255,255,0.25);
+        }
+
+        /* ── Steps ── */
+        .dl-steps {
+            display: flex;
+            gap: 0;
+            margin-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            padding-top: 18px;
+        }
+
+        .dl-step {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            position: relative;
+        }
+
+        .dl-step:not(:last-child)::after {
+            content: "";
+            position: absolute;
+            top: 14px;
+            left: 60%;
+            width: 80%;
+            height: 1px;
+            background: rgba(255,255,255,0.08);
+        }
+
+        .dl-step.active:not(:last-child)::after {
+            background: linear-gradient(90deg, #4f8cff, rgba(255,255,255,0.08));
+        }
+
+        .dl-step.done:not(:last-child)::after {
+            background: rgba(0,255,174,0.3);
+        }
+
+        .step-icon {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .dl-step.active .step-icon {
+            background: rgba(79,140,255,0.2);
+            border-color: rgba(79,140,255,0.4);
+            color: #7cb0ff;
+            animation: step-pulse 1.5s ease infinite;
+        }
+
+        .dl-step.done .step-icon {
+            background: rgba(0,255,174,0.15);
+            border-color: rgba(0,255,174,0.3);
+            color: #00ffae;
+        }
+
+        @keyframes step-pulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(79,140,255,0.3); }
+            50% { box-shadow: 0 0 0 6px rgba(79,140,255,0); }
+        }
+
+        .step-label {
+            font-size: 10px;
+            color: rgba(255,255,255,0.25);
+            text-align: center;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        .dl-step.active .step-label { color: #7cb0ff; }
+        .dl-step.done .step-label { color: #00ffae; }
+
+        /* ── Empty State ── */
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: rgba(255,255,255,0.2);
+        }
+
+        .empty-state svg { opacity: 0.15; margin-bottom: 16px; display: block; margin-left: auto; margin-right: auto; }
+        .empty-state .empty-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: rgba(255,255,255,0.3); }
+        .empty-state .empty-sub { font-size: 12px; color: rgba(255,255,255,0.15); }
+
+        /* ── History ── */
+        .history-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 13px 16px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.025);
+            border: 1px solid rgba(255,255,255,0.04);
+            margin-bottom: 8px;
+            transition: 0.15s ease;
+        }
+
+        .history-row:hover {
+            background: rgba(255,255,255,0.04);
+            border-color: rgba(255,255,255,0.07);
+        }
+
+        .history-icon {
+            width: 38px; height: 38px;
+            border-radius: 11px;
+            background: rgba(0,255,174,0.08);
+            border: 1px solid rgba(0,255,174,0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #00ffae;
+            flex-shrink: 0;
+        }
+
+        .history-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .history-date {
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+            margin-top: 2px;
+        }
+
+        .history-badge {
+            font-size: 11px;
+            font-weight: 700;
+            color: #00ffae;
+            background: rgba(0,255,174,0.08);
+            border: 1px solid rgba(0,255,174,0.15);
+            padding: 4px 10px;
+            border-radius: 999px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="bg"></div>
+
+<div class="top-bar drag-region">
+    <button class="win-btn no-drag" onclick="window.api.minimize()">–</button>
+    <button class="win-btn no-drag" onclick="window.api.fullscreen()">□</button>
+    <button class="win-btn close no-drag" onclick="window.api.close()">×</button>
+</div>
+
+<div class="app-shell no-drag">
+
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <div class="sidebar-logo-badge">CA</div>
+            <div class="sidebar-logo-text">
+                <span>CA STORE</span>
+                <span>Graphics Manager</span>
+            </div>
+        </div>
+
+        <div class="side-title">Store</div>
+
+        <div class="side-btn" onclick="window.api.openPage('index.html')">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 10.5L9 3l6 7.5v6H3z"></path></svg>
+            <span class="text">Overview</span>
+        </div>
+
+        <div class="side-btn" onclick="window.api.openPage('versions.html')">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="5" height="5"></rect><rect x="10" y="3" width="5" height="5"></rect><rect x="3" y="10" width="5" height="5"></rect><rect x="10" y="10" width="5" height="5"></rect></svg>
+            <span class="text">Graphics Packs</span>
+        </div>
+
+        <div class="side-btn" onclick="window.api.openPage('addons.html')">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 2l3 3-3 3-3-3 3-3z"></path><path d="M9 10l3 3-3 3-3-3 3-3z"></path></svg>
+            <span class="text">Mods</span>
+        </div>
+
+        <div class="side-btn active" onclick="window.api.openPage('downloads.html')">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 2v9"></path><path d="M5 8l4 4 4-4"></path><path d="M4 15h10"></path></svg>
+            <span class="text">Downloads</span>
+        </div>
+
+        <div class="side-title">System</div>
+
+        <div class="side-btn" onclick="window.api.openPage('settings.html')">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3"></circle><path d="M15 10a1.5 1.5 0 0 0 .3 1.65l.05.05a1.8 1.8 0 1 1-2.55 2.55l-.05-.05A1.5 1.5 0 0 0 11 15.5V16a1.8 1.8 0 1 1-3.6 0v-.5A1.5 1.5 0 0 0 5.25 14.2l-.05.05a1.8 1.8 0 1 1-2.55-2.55l.05-.05A1.5 1.5 0 0 0 3 10V9.5A1.5 1.5 0 0 0 2.7 7.85l-.05-.05A1.8 1.8 0 1 1 5.2 5.25l.05.05A1.5 1.5 0 0 0 7.4 5h.5A1.5 1.5 0 0 0 9.55 3.7l.05-.05A1.8 1.8 0 1 1 12.15 6.2l-.05.05A1.5 1.5 0 0 0 11 7.5V9z"></path></svg>
+            <span class="text">Settings</span>
+        </div>
+
+        <div class="side-btn" onclick="logout()" style="margin-top:auto;color:#ff4d6a;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <span class="text">Logout</span>
+        </div>
+    </aside>
+
+    <div class="content no-drag">
+        <div class="content-inner">
+
+            <div class="mods-header">
+                <div>
+                    <div class="page-badge">DOWNLOADS</div>
+                    <h1 class="title">Download Center</h1>
+                    <p class="subtitle">متابعة التحميلات والتثبيت</p>
+                </div>
+            </div>
+
+            <!-- Active Download Card -->
+            <div id="downloadBox" class="dl-card" style="display:none;">
+                <div class="dl-header">
+                    <div class="dl-icon">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M12 2v14"></path>
+                            <path d="M8 12l4 4 4-4"></path>
+                            <path d="M4 20h16"></path>
+                        </svg>
+                    </div>
+                    <div style="flex:1;">
+                        <div class="dl-title" id="downloadName">جاري التحميل...</div>
+                        <div class="dl-status">
+                            <div class="dl-status-dot" id="statusDot"></div>
+                            <span id="downloadStatus">يرجى الانتظار</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="progress-wrap">
+                    <div class="progress-track">
+                        <div id="progressBar" class="progress-fill"></div>
+                    </div>
+                    <div class="dl-meta">
+                        <div class="dl-percent" id="progressPercent">0%</div>
+                        <div class="dl-right-info">
+                            <div class="dl-speed" id="progressSpeed">0 MB/s</div>
+                            <div class="dl-size" id="progressSize">—</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Steps -->
+                <div class="dl-steps">
+                    <div class="dl-step" id="step-download">
+                        <div class="step-icon">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 1v7"/><path d="M3 5l3 3 3-3"/></svg>
+                        </div>
+                        <div class="step-label">تحميل</div>
+                    </div>
+                    <div class="dl-step" id="step-extract">
+                        <div class="step-icon">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="3" width="8" height="7" rx="1"/><path d="M4 10v2"/><path d="M8 10v2"/></svg>
+                        </div>
+                        <div class="step-label">فك الضغط</div>
+                    </div>
+                    <div class="dl-step" id="step-install">
+                        <div class="step-icon">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 9l3 3 5-6"/></svg>
+                        </div>
+                        <div class="step-label">تثبيت</div>
+                    </div>
+                    <div class="dl-step" id="step-hide">
+                        <div class="step-icon">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 6s2-4 5-4 5 4 5 4-2 4-5 4-5-4-5-4z"/><circle cx="6" cy="6" r="1.5"/></svg>
+                        </div>
+                        <div class="step-label">حماية</div>
+                    </div>
+                    <div class="dl-step" id="step-done">
+                        <div class="step-icon">✓</div>
+                        <div class="step-label">مكتمل</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyMsg" class="dl-card" style="display:none;">
+                <div class="empty-state">
+                    <svg width="52" height="52" fill="none" stroke="currentColor" stroke-width="1.2">
+                        <path d="M26 6v28"></path>
+                        <path d="M14 24l12 12 12-12"></path>
+                        <path d="M8 44h36"></path>
+                    </svg>
+                    <div class="empty-title">لا يوجد تحميل نشط</div>
+                    <div class="empty-sub">ابدأ تحميل من صفحة Graphics Packs أو Mods</div>
+                </div>
+            </div>
+
+            <!-- History -->
+            <section class="mods-section" style="margin-top:16px;">
+                <div class="section-top">
+                    <div>
+                        <h2 class="section-title">Download History</h2>
+                        <p class="section-subtitle">سجل التحميلات السابقة</p>
+                    </div>
+                    <button class="pack-btn" onclick="clearHistory()" style="opacity:0.5;font-size:12px;">مسح السجل</button>
+                </div>
+                <div id="downloadHistory"></div>
+            </section>
+
+        </div>
+    </div>
+
+</div>
+
+<script src="downloads.js"></script>
+<script>
+function clearHistory() {
+    localStorage.removeItem("download_history");
+    location.reload();
+}
+function logout() {
+    window.api.auth.logout().then(() => window.api.openPage("login.html"));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="ar">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CA Store - Dashboard</title>
+
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .content {
+            direction: ltr;
+        }
+
+        /* =========================================================
+           HERO
+        ========================================================= */
+        .dashboard-hero {
+            position: relative;
+            overflow: hidden;
+            border-radius: 28px;
+            padding: 34px;
+            margin-bottom: 18px;
+
+            background:
+                radial-gradient(circle at top right, rgba(79, 140, 255, .18), transparent 30%),
+                radial-gradient(circle at bottom left, rgba(0, 255, 174, .12), transparent 30%),
+                rgba(13, 16, 23, .92);
+
+            border: 1px solid rgba(255, 255, 255, .06);
+            backdrop-filter: blur(24px);
+
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .dashboard-hero::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(transparent 95%, rgba(255,255,255,.03) 100%),
+                linear-gradient(90deg, transparent 95%, rgba(255,255,255,.03) 100%);
+            background-size: 30px 30px;
+            pointer-events: none;
+            opacity: .3;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+
+            padding: 6px 14px;
+            border-radius: 999px;
+
+            background: rgba(79,140,255,.12);
+            border: 1px solid rgba(79,140,255,.18);
+
+            color: #7cb0ff;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .15em;
+            text-transform: uppercase;
+
+            margin-bottom: 14px;
+        }
+
+        .hero-title {
+            font-family: 'Syne', sans-serif;
+            font-size: 42px;
+            line-height: 1;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -.04em;
+            margin-bottom: 14px;
+        }
+
+        .hero-title span {
+            background: linear-gradient(90deg, #fff, #7cb0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-subtitle {
+            max-width: 650px;
+            color: rgba(255,255,255,.48);
+            font-size: 14px;
+            line-height: 1.8;
+            margin-bottom: 22px;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .hero-btn {
+            height: 48px;
+            padding: 0 18px;
+            border-radius: 14px;
+
+            display: flex;
+            align-items: center;
+            gap: 10px;
+
+            border: 1px solid rgba(255,255,255,.07);
+
+            background: rgba(255,255,255,.04);
+
+            color: #fff;
+            cursor: pointer;
+
+            transition: .18s ease;
+
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .hero-btn:hover {
+            transform: translateY(-2px);
+            border-color: rgba(79,140,255,.25);
+            background: rgba(79,140,255,.08);
+        }
+
+        .hero-btn.primary {
+            background: linear-gradient(135deg, #4f8cff, #7c5cff);
+            border: none;
+        }
+
+        .hero-right {
+            min-width: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .live-card {
+            padding: 16px;
+            border-radius: 18px;
+
+            background: rgba(255,255,255,.03);
+            border: 1px solid rgba(255,255,255,.05);
+
+            backdrop-filter: blur(14px);
+        }
+
+        .live-top {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .live-label {
+            color: rgba(255,255,255,.4);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .15em;
+            font-weight: 800;
+        }
+
+        .live-value {
+            font-size: 14px;
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .live-bar {
+            width: 100%;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.05);
+            overflow: hidden;
+        }
+
+        .live-bar-fill {
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #4f8cff, #00ffae);
+        }
+
+        /* =========================================================
+           GRID
+        ========================================================= */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1.1fr .9fr;
+            gap: 18px;
+            margin-top: 18px;
+        }
+
+        .dashboard-left,
+        .dashboard-right {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        /* =========================================================
+           STATS
+        ========================================================= */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+        }
+
+        .stat-card {
+            position: relative;
+            overflow: hidden;
+
+            padding: 22px;
+            border-radius: 22px;
+
+            background: rgba(16, 20, 28, .9);
+            border: 1px solid rgba(255,255,255,.05);
+
+            transition: .18s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(255,255,255,.08);
+        }
+
+        .stat-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+        }
+
+        .stat-blue::before {
+            background: linear-gradient(90deg, #4f8cff, transparent);
+        }
+
+        .stat-green::before {
+            background: linear-gradient(90deg, #00ffae, transparent);
+        }
+
+        .stat-purple::before {
+            background: linear-gradient(90deg, #a78bfa, transparent);
+        }
+
+        .stat-orange::before {
+            background: linear-gradient(90deg, #ffb347, transparent);
+        }
+
+        .stat-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            margin-bottom: 16px;
+        }
+
+        .stat-blue .stat-icon {
+            background: rgba(79,140,255,.12);
+            color: #7cb0ff;
+        }
+
+        .stat-green .stat-icon {
+            background: rgba(0,255,174,.1);
+            color: #00ffae;
+        }
+
+        .stat-purple .stat-icon {
+            background: rgba(167,139,250,.1);
+            color: #c4b5fd;
+        }
+
+        .stat-orange .stat-icon {
+            background: rgba(255,179,71,.1);
+            color: #ffb347;
+        }
+
+        .stat-number {
+            font-family: 'Syne', sans-serif;
+            font-size: 34px;
+            color: #fff;
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+
+        .stat-text {
+            color: rgba(255,255,255,.42);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        /* =========================================================
+           PANELS
+        ========================================================= */
+        .panel {
+            background: rgba(14, 18, 25, .92);
+            border: 1px solid rgba(255,255,255,.05);
+            border-radius: 24px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 22px 24px 18px;
+            border-bottom: 1px solid rgba(255,255,255,.04);
+
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .panel-sub {
+            color: rgba(255,255,255,.4);
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .panel-body {
+            padding: 22px;
+        }
+
+        /* =========================================================
+           QUICK ACTIONS
+        ========================================================= */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .quick-action {
+            padding: 18px;
+            border-radius: 18px;
+
+            background: rgba(255,255,255,.03);
+            border: 1px solid rgba(255,255,255,.05);
+
+            cursor: pointer;
+            transition: .18s ease;
+        }
+
+        .quick-action:hover {
+            transform: translateY(-2px);
+            border-color: rgba(79,140,255,.18);
+            background: rgba(79,140,255,.08);
+        }
+
+        .quick-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            margin-bottom: 14px;
+
+            background: rgba(79,140,255,.12);
+            color: #7cb0ff;
+        }
+
+        .quick-title {
+            color: #fff;
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .quick-desc {
+            color: rgba(255,255,255,.42);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        /* =========================================================
+           SYSTEM
+        ========================================================= */
+        .system-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .system-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            padding: 14px 16px;
+            border-radius: 16px;
+
+            background: rgba(255,255,255,.025);
+            border: 1px solid rgba(255,255,255,.04);
+        }
+
+        .system-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .system-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            background: rgba(255,255,255,.05);
+            color: #fff;
+        }
+
+        .system-title {
+            color: #fff;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .system-subtitle {
+            color: rgba(255,255,255,.38);
+            font-size: 11px;
+            margin-top: 4px;
+        }
+
+        .status-pill {
+            padding: 7px 12px;
+            border-radius: 999px;
+
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .online {
+            background: rgba(0,255,174,.1);
+            border: 1px solid rgba(0,255,174,.18);
+            color: #00ffae;
+        }
+
+        .offline {
+            background: rgba(255,77,106,.1);
+            border: 1px solid rgba(255,77,106,.16);
+            color: #ff4d6a;
+        }
+
+        @media(max-width:1200px) {
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-hero {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .hero-right {
+                width: 100%;
+            }
+
+        }
+
+        @media(max-width:700px) {
+
+            .stats-grid,
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-title {
+                font-size: 32px;
+            }
+
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <div class="bg"></div>
+
+    <!-- TOP BAR -->
+    <div class="top-bar drag-region">
+
+        <button class="win-btn no-drag" onclick="window.api.minimize()">—</button>
+        <button class="win-btn no-drag" onclick="window.api.fullscreen()">□</button>
+        <button class="win-btn close no-drag" onclick="window.api.close()">×</button>
+
+    </div>
+
+    <div class="app-shell no-drag">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+
+            <div class="sidebar-logo">
+                <div class="sidebar-logo-badge">CA</div>
+                <div class="sidebar-logo-text">
+                    <span>CA STORE</span>
+                    <span>Graphics Manager</span>
+                </div>
+            </div>
+
+            <div class="side-title">Store</div>
+
+            <div class="side-btn active" onclick="window.api.openPage('index.html')">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M3 10.5L9 3l6 7.5v6H3z"></path>
+                </svg>
+                <span class="text">Overview</span>
+            </div>
+
+            <div class="side-btn" onclick="window.api.openPage('versions.html')">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="3" width="5" height="5"></rect>
+                    <rect x="10" y="3" width="5" height="5"></rect>
+                    <rect x="3" y="10" width="5" height="5"></rect>
+                    <rect x="10" y="10" width="5" height="5"></rect>
+                </svg>
+                <span class="text">Graphics Packs</span>
+            </div>
+
+            <div class="side-btn" onclick="window.api.openPage('addons.html')">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M9 2l3 3-3 3-3-3 3-3z"></path>
+                    <path d="M9 10l3 3-3 3-3-3 3-3z"></path>
+                </svg>
+                <span class="text">Mods</span>
+            </div>
+
+            <div class="side-btn" onclick="window.api.openPage('downloads.html')">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M9 2v9"></path>
+                    <path d="M5 8l4 4 4-4"></path>
+                    <path d="M4 15h10"></path>
+                </svg>
+                <span class="text">Downloads</span>
+            </div>
+
+            <div class="side-title">System</div>
+
+            <div class="side-btn" onclick="window.api.openPage('settings.html')">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="9" cy="9" r="3"></circle>
+                    <path d="M15 10a1.5 1.5 0 0 0 .3 1.65l.05.05a1.8 1.8 0 1 1-2.55 2.55l-.05-.05A1.5 1.5 0 0 0 11 15.5V16a1.8 1.8 0 1 1-3.6 0v-.5A1.5 1.5 0 0 0 5.25 14.2l-.05.05a1.8 1.8 0 1 1-2.55-2.55l.05-.05A1.5 1.5 0 0 0 3 10V9.5A1.5 1.5 0 0 0 2.7 7.85l-.05-.05A1.8 1.8 0 1 1 5.2 5.25l.05.05A1.5 1.5 0 0 0 7.4 5h.5A1.5 1.5 0 0 0 9.55 3.7l.05-.05A1.8 1.8 0 1 1 12.15 6.2l-.05.05A1.5 1.5 0 0 0 11 7.5V9z"></path>
+                </svg>
+                <span class="text">Settings</span>
+            </div>
+
+            <div class="side-btn" onclick="logout()" style="margin-top:auto; color:#ff4d6a;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span class="text">Logout</span>
+            </div>
+
+        </aside>
+
+        <!-- MAIN -->
+        <main class="content no-drag">
+
+            <div class="content-inner">
+
+                <!-- HERO -->
+                <section class="dashboard-hero">
+
+                    <div>
+
+                        <div class="hero-badge">
+                            CA STORE DASHBOARD
+                        </div>
+
+                        <h1 class="hero-title">
+                            Welcome Back
+                            <span id="welcomeName">User</span>
+                        </h1>
+
+                        <p class="hero-subtitle">
+                            Manage your graphics packs, mods, downloads and system status
+                            from one advanced control center.
+                        </p>
+
+                        <div class="hero-actions">
+
+                            <button class="hero-btn primary" onclick="window.api.openPage('versions.html')">
+
+                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="5" height="5"></rect>
+                                    <rect x="10" y="3" width="5" height="5"></rect>
+                                    <rect x="3" y="10" width="5" height="5"></rect>
+                                    <rect x="10" y="10" width="5" height="5"></rect>
+                                </svg>
+
+                                Graphics Packs
+
+                            </button>
+
+                            <button class="hero-btn" onclick="window.api.openPage('addons.html')">
+
+                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 2l3 3-3 3-3-3 3-3z"></path>
+                                    <path d="M9 10l3 3-3 3-3-3 3-3z"></path>
+                                </svg>
+
+                                Mods Center
+
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                    <div class="hero-right">
+
+                        <div class="live-card">
+
+                            <div class="live-top">
+                                <div class="live-label">Subscription</div>
+                                <div class="live-value" id="welcomePlan">Loading...</div>
+                            </div>
+
+                            <div class="live-bar">
+                                <div class="live-bar-fill" style="width:92%"></div>
+                            </div>
+
+                        </div>
+
+                        <div class="live-card">
+
+                            <div class="live-top">
+                                <div class="live-label">Connection</div>
+                                <div class="live-value" id="connectionStatus">
+                                    —
+                                </div>
+                            </div>
+
+                            <div class="live-bar">
+                                <div class="live-bar-fill" id="connectionBar" style="width:20%"></div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+                <!-- GRID -->
+                <div class="dashboard-grid">
+
+                    <!-- LEFT -->
+                    <div class="dashboard-left">
+
+                        <!-- STATS -->
+                        <div class="stats-grid">
+
+                            <div class="stat-card stat-blue">
+
+                                <div class="stat-icon">
+                                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="5" height="5"></rect>
+                                        <rect x="10" y="3" width="5" height="5"></rect>
+                                        <rect x="3" y="10" width="5" height="5"></rect>
+                                        <rect x="10" y="10" width="5" height="5"></rect>
+                                    </svg>
+                                </div>
+
+                                <div class="stat-number" id="packsCount">0</div>
+                                <div class="stat-text">Active Graphics Packs</div>
+
+                            </div>
+
+                            <div class="stat-card stat-green">
+
+                                <div class="stat-icon">
+                                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 2l3 3-3 3-3-3 3-3z"></path>
+                                        <path d="M9 10l3 3-3 3-3-3 3-3z"></path>
+                                    </svg>
+                                </div>
+
+                                <div class="stat-number" id="modsCount">0</div>
+                                <div class="stat-text">Installed Mods</div>
+
+                            </div>
+
+                            <div class="stat-card stat-purple">
+
+                                <div class="stat-icon">
+                                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="9" cy="9" r="4"></circle>
+                                        <path d="M2 9h2M14 9h2M9 2v2M9 14v2"></path>
+                                    </svg>
+                                </div>
+
+                                <div class="stat-number" id="reshadeStatus" style="font-size:18px;padding-top:8px;">
+                                    —
+                                </div>
+
+                                <div class="stat-text">
+                                    ReShade Status
+                                </div>
+
+                            </div>
+
+                            <div class="stat-card stat-orange">
+
+                                <div class="stat-icon">
+                                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="9" cy="9" r="7"></circle>
+                                        <path d="M9 5v4l2.5 2.5"></path>
+                                    </svg>
+                                </div>
+
+                                <div class="stat-number" id="lastUpdate" style="font-size:14px;padding-top:10px;line-height:1.5;">
+                                    —
+                                </div>
+
+                                <div class="stat-text">
+                                    Last Update
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <!-- QUICK -->
+                        <section class="panel">
+
+                            <div class="panel-header">
+
+                                <div>
+
+                                    <div class="panel-title">
+                                        Quick Access
+                                    </div>
+
+                                    <div class="panel-sub">
+                                        Fast navigation across the application
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <div class="panel-body">
+
+                                <div class="quick-actions">
+
+                                    <div class="quick-action" onclick="window.api.openPage('versions.html')">
+
+                                        <div class="quick-icon">
+                                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="3" y="3" width="5" height="5"></rect>
+                                                <rect x="10" y="3" width="5" height="5"></rect>
+                                                <rect x="3" y="10" width="5" height="5"></rect>
+                                                <rect x="10" y="10" width="5" height="5"></rect>
+                                            </svg>
+                                        </div>
+
+                                        <div class="quick-title">
+                                            Graphics Packs
+                                        </div>
+
+                                        <div class="quick-desc">
+                                            Browse and install official CA graphics.
+                                        </div>
+
+                                    </div>
+
+                                    <div class="quick-action" onclick="window.api.openPage('addons.html')">
+
+                                        <div class="quick-icon">
+                                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M9 2l3 3-3 3-3-3 3-3z"></path>
+                                                <path d="M9 10l3 3-3 3-3-3 3-3z"></path>
+                                            </svg>
+                                        </div>
+
+                                        <div class="quick-title">
+                                            Mods Center
+                                        </div>
+
+                                        <div class="quick-desc">
+                                            Manage all installed add-ons and RPF mods.
+                                        </div>
+
+                                    </div>
+
+                                    <div class="quick-action" onclick="window.api.openPage('downloads.html')">
+
+                                        <div class="quick-icon">
+                                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M9 2v9"></path>
+                                                <path d="M5 8l4 4 4-4"></path>
+                                                <path d="M4 15h10"></path>
+                                            </svg>
+                                        </div>
+
+                                        <div class="quick-title">
+                                            Downloads
+                                        </div>
+
+                                        <div class="quick-desc">
+                                            Track download history and install progress.
+                                        </div>
+
+                                    </div>
+
+                                    <div class="quick-action" onclick="window.api.openPage('settings.html')">
+
+                                        <div class="quick-icon">
+                                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="9" cy="9" r="3"></circle>
+                                                <path d="M15 10a1.5 1.5 0 0 0 .3 1.65"></path>
+                                            </svg>
+                                        </div>
+
+                                        <div class="quick-title">
+                                            Settings
+                                        </div>
+
+                                        <div class="quick-desc">
+                                            Configure FiveM paths and application options.
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </section>
+
+                    </div>
+
+                    <!-- RIGHT -->
+                    <div class="dashboard-right">
+
+                        <section class="panel">
+
+                            <div class="panel-header">
+
+                                <div>
+
+                                    <div class="panel-title">
+                                        System Status
+                                    </div>
+
+                                    <div class="panel-sub">
+                                        Live environment and application state
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <div class="panel-body">
+
+                                <div class="system-list">
+
+                                    <div class="system-row">
+
+                                        <div class="system-left">
+
+                                            <div class="system-icon">
+
+                                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <circle cx="9" cy="9" r="7"></circle>
+                                                </svg>
+
+                                            </div>
+
+                                            <div>
+
+                                                <div class="system-title">
+                                                    FiveM Status
+                                                </div>
+
+                                                <div class="system-subtitle">
+                                                    Current installation state
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+
+                                        <div class="status-pill offline" id="fivemStatus">
+                                            —
+                                        </div>
+
+                                    </div>
+
+                                    <div class="system-row">
+
+                                        <div class="system-left">
+
+                                            <div class="system-icon">
+
+                                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M3 12h18"></path>
+                                                    <path d="M7 6h10"></path>
+                                                </svg>
+
+                                            </div>
+
+                                            <div>
+
+                                                <div class="system-title">
+                                                    FiveM Path
+                                                </div>
+
+                                                <div class="system-subtitle">
+                                                    Current configured path
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+
+<div id="pathsStatus"
+style="
+    max-width: 220px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+    color: rgba(255,255,255,.42);
+    font-size: 11px;
+    line-height: 1.6;
+    direction: ltr;
+">
+    —
+</div>
+                                    </div>
+
+                                    <div class="system-row">
+
+                                        <div class="system-left">
+
+                                            <div class="system-icon">
+
+                                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M2 9a7 7 0 0114 0"></path>
+                                                    <path d="M5 9a4 4 0 018 0"></path>
+                                                </svg>
+
+                                            </div>
+
+                                            <div>
+
+                                                <div class="system-title">
+                                                    Internet Connection
+                                                </div>
+
+                                                <div class="system-subtitle">
+                                                    Online services availability
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+
+                                        <div class="status-pill offline" id="connectionPill">
+                                            —
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </section>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </main>
+
+    </div>
+
+    <div id="notify" class="notification"></div>
+
+    <script src="home.js"></script>
+
+</body>
+
+</html>
