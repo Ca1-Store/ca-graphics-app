@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "CA Store Graphics Installer",
   "main": "main.js",
-  "scripts": {
-    "start": "electron .",
-    "dist": "electron-builder"
-  },
+"scripts": {
+  "start": "electron .",
+  "build": "electron-builder"
+},
   "keywords": [],
   "author": "CA Store",
   "license": "MIT",
@@ -31,14 +31,17 @@
     "pg": "^8.20.0",
     "unzipper": "^0.12.3"
   },
-  "build": {
-    "appId": "com.castore.graphicsapp",
-    "productName": "CA Store Graphics App",
-    "win": {
-      "target": "nsis"
-    },
-    "publish": {
-      "provider": "github"
-    }
+"build": {
+  "appId": "com.castore.graphicsapp",
+  "productName": "Ca App",
+
+  "win": {
+    "target": "nsis",
+    "icon": "build/Ca.ico"
+  },
+
+  "publish": {
+    "provider": "github"
   }
+}
 }
