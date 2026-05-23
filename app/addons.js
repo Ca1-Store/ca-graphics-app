@@ -56,7 +56,7 @@ const sections = [
             { name: "Halloween Content Pack", file: "Halloween_Content_Pack.rpf", img: "../assets/Halloween Content Pack.jpg", url: "https://drive.google.com/uc?export=download&id=1lsCxPLncy3InVult9mnmUbz6uIfPxHGx" },
             { name: "Christmas Content Pack", file: "Christmas_Content_Pack.rpf", img: "../assets/Christmas Content Pack.jpg", url: "https://drive.google.com/uc?export=download&id=1Ue47E5ZPf1FWhAEZKvNWGaMtYAYothVf" },
             { name: "Weather FOGGY", file: "Weather_Override_FOGGY.rpf", img: "../assets/Foggy_Deep Weather.jpg", url: "https://drive.google.com/uc?export=download&id=1SM68rMDuJiQNBsEVzm8FAETDfI5S2udD" },
-            { name: "Volumetric Clouds", file: "Volumetric_Clouds.rpf", img: "../assets/Vol.png", url: "https://drive.google.com/uc?export=download&id=10_Rbku1_LyWcDcg5J1VLmdzpObcC6pLX" },
+            { name: "Volumetric Clouds", file: "Volumetric_Clouds.rpf", img: "../assets/vol.png", url: "https://drive.google.com/uc?export=download&id=10_Rbku1_LyWcDcg5J1VLmdzpObcC6pLX" },
             { name: "Snowy Mount Chiliad", file: "Snowy_Mount_Chilliad.rpf", img: "../assets/Mount.png", url: "https://drive.google.com/uc?export=download&id=1s_NYuTJhdMTiBTazrqZmpMqH4dOXEgFn" }
         ]
     }
