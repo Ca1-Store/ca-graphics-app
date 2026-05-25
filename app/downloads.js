@@ -1,18 +1,19 @@
-const box        = document.getElementById("downloadBox");
-const bar        = document.getElementById("progressBar");
-const pct        = document.getElementById("progressPercent");
-const spd        = document.getElementById("progressSpeed");
-const sizeEl     = document.getElementById("progressSize");
-const dlName     = document.getElementById("downloadName");
-const dlStatus   = document.getElementById("downloadStatus");
-const statusDot  = document.getElementById("statusDot");
-const emptyMsg   = document.getElementById("emptyMsg");
-const historyEl  = document.getElementById("downloadHistory");
+const box       = document.getElementById("downloadBox");
+const bar       = document.getElementById("progressBar");
+const pct       = document.getElementById("progressPercent");
+const spd       = document.getElementById("progressSpeed");
+const sizeEl    = document.getElementById("progressSize");
+const dlName    = document.getElementById("downloadName");
+const dlStatus  = document.getElementById("downloadStatus");
+const statusDot = document.getElementById("statusDot");
+const emptyMsg  = document.getElementById("emptyMsg");
+const historyEl = document.getElementById("downloadHistory");
 
 let downloadHistory = JSON.parse(localStorage.getItem("download_history") || "[]");
+let listenersRegistered = false; // ✅ منع تسجيل الـ listeners أكثر من مرة
 
 /* ============================================================
-   STEPS HELPER
+   STEPS
 ============================================================ */
 const STEPS = ["download", "extract", "install", "hide", "done"];
 
@@ -28,12 +29,8 @@ function setStep(stepName) {
     });
 }
 
-/* ============================================================
-   STATUS HELPER
-============================================================ */
 function setStatus(msg, color = "#7cb0ff", dotColor = "#4f8cff") {
-    if (dlStatus) dlStatus.textContent = msg;
-    if (dlStatus) dlStatus.style.color = color;
+    if (dlStatus) { dlStatus.textContent = msg; dlStatus.style.color = color; }
     if (statusDot) statusDot.style.background = dotColor;
 }
 
@@ -78,10 +75,49 @@ function renderHistory() {
 }
 
 /* ============================================================
-   MAIN DOWNLOAD FLOW
+   REGISTER LISTENERS ONCE
+   ✅ السبب الأساسي لانقطاع التحميل عند التنقل:
+   كل مرة تفتح الصفحة كانت تسجّل listeners جديدة
+   والقديمة تنكسر. الحل: نسجّل مرة وحدة فقط.
+============================================================ */
+function registerListeners(onProgress, onStatus) {
+    if (listenersRegistered) return;
+    listenersRegistered = true;
+
+    window.api.onDownloadProgress(data => {
+        onProgress(data);
+    });
+
+    window.api.onInstallStatus(data => {
+        onStatus(data);
+    });
+}
+
+/* ============================================================
+   FINISH DOWNLOAD UI
+============================================================ */
+function onDownloadComplete(pending) {
+    downloadHistory.push({
+        name: pending.name,
+        date: new Date().toLocaleString("ar")
+    });
+    localStorage.setItem("download_history", JSON.stringify(downloadHistory));
+    localStorage.setItem("last_update", new Date().toLocaleString());
+
+    renderHistory();
+
+    setTimeout(() => {
+        if (box) box.style.display = "none";
+        if (emptyMsg) emptyMsg.style.display = "block";
+    }, 5000);
+}
+
+/* ============================================================
+   MAIN FLOW
 ============================================================ */
 async function startPendingDownload() {
     const raw = localStorage.getItem("pending_download");
+
     if (!raw) {
         if (emptyMsg) emptyMsg.style.display = "block";
         if (box) box.style.display = "none";
@@ -97,53 +133,54 @@ async function startPendingDownload() {
 
     if (dlName) dlName.textContent = pending.name || "جاري التحميل...";
 
-    // ── مرحلة 0: حذف الجرافيكس القديمة إذا مطلوب ──
+    // ✅ سجّل الـ listeners مرة وحدة قبل بدء أي عملية
+    registerListeners(
+        // onProgress
+        (data) => {
+            setProgress(data.percent, data.speed + " MB/s");
+        },
+        // onInstallStatus
+        (data) => {
+            if (data.stage === "preparing") {
+                setStep("extract");
+                setStatus("جاري التحضير...", "#7cb0ff", "#4f8cff");
+                setProgress(100, "—");
+            }
+            if (data.stage === "extracting") {
+                setStep("extract");
+                setStatus("جاري فك الضغط...", "#7cb0ff", "#4f8cff");
+            }
+            if (data.stage === "copying") {
+                setStep("install");
+                setStatus("جاري نسخ الملفات...", "#a78bfa", "#7c5cff");
+                setProgress(100, "—", "نسخ الملفات...");
+            }
+            if (data.stage === "hiding") {
+                setStep("hide");
+                setStatus("جاري حماية الملفات...", "#ffb347", "#ffb347");
+                setProgress(100, "—", "حماية...");
+            }
+            if (data.stage === "done") {
+                setStep("done");
+                setStatus("تم بنجاح! ✅", "#00ffae", "#00ffae");
+                setProgress(100, "مكتمل", "—");
+                if (statusDot) statusDot.style.animation = "none";
+            }
+        }
+    );
+
+    // حذف الجرافيكس القديمة إذا مطلوب
     if (pending.deleteFirst && pending.type === "pack") {
         setStatus("جاري حذف الجرافيكس القديمة...", "#ffb347", "#ffb347");
         setStep("download");
         await window.api.deleteGraphics();
     }
 
-    // ── مرحلة 1: التحميل ──
+    // بدء التحميل
     setStep("download");
     setStatus("جاري التحميل...", "#7cb0ff", "#4f8cff");
     setProgress(0, "0 MB/s");
 
-    // استقبال progress
-    window.api.onDownloadProgress(data => {
-        setProgress(data.percent, data.speed + " MB/s");
-    });
-
-    // استقبال install status من main.js
-    window.api.onInstallStatus(data => {
-        if (data.stage === "preparing") {
-            setStep("extract");
-            setStatus("جاري التحضير...", "#7cb0ff", "#4f8cff");
-            setProgress(100, "—");
-        }
-        if (data.stage === "extracting") {
-            setStep("extract");
-            setStatus("جاري فك الضغط...", "#7cb0ff", "#4f8cff");
-        }
-        if (data.stage === "copying") {
-            setStep("install");
-            setStatus("جاري نسخ الملفات...", "#a78bfa", "#7c5cff");
-            setProgress(100, "—", "نسخ الملفات...");
-        }
-        if (data.stage === "hiding") {
-            setStep("hide");
-            setStatus("جاري حماية الملفات...", "#ffb347", "#ffb347");
-            setProgress(100, "—", "حماية...");
-        }
-        if (data.stage === "done") {
-            setStep("done");
-            setStatus("تم بنجاح! ✅", "#00ffae", "#00ffae");
-            setProgress(100, "مكتمل", "—");
-            if (statusDot) statusDot.style.animation = "none";
-        }
-    });
-
-    // بدء التحميل
     const result = await window.api.startDownload(pending.url, pending.productId);
 
     if (!result.success) {
@@ -159,13 +196,11 @@ async function startPendingDownload() {
     // تثبيت الباك
     if (pending.type === "pack") {
         const install = await window.api.runInstall(result.zipPath, pending.productId);
-
         if (!install.success) {
             setStatus("❌ فشل التثبيت", "#ff4d6a", "#ff4d6a");
             if (statusDot) statusDot.style.animation = "none";
             return;
         }
-        // install:status يعرض المراحل تلقائياً
     }
 
     // مودات
@@ -178,21 +213,7 @@ async function startPendingDownload() {
         if (statusDot) statusDot.style.animation = "none";
     }
 
-    // سجّل في التاريخ
-    downloadHistory.push({
-        name: pending.name,
-        date: new Date().toLocaleString("ar")
-    });
-    localStorage.setItem("download_history", JSON.stringify(downloadHistory));
-    localStorage.setItem("last_update", new Date().toLocaleString());
-
-    renderHistory();
-
-    // إخفاء الـ box بعد 5 ثواني
-    setTimeout(() => {
-        if (box) box.style.display = "none";
-        if (emptyMsg) emptyMsg.style.display = "block";
-    }, 5000);
+    onDownloadComplete(pending);
 }
 
 /* ============================================================

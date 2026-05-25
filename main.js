@@ -150,11 +150,10 @@ ipcMain.handle("path:get", () => {
 /* ============================================================
    HIDE / UNHIDE HELPERS
 ============================================================ */
+// يخفي المجلد من الخارج فقط - الملفات الداخلية تبقى ظاهرة
 function attribHideFolder(folderPath) {
     return new Promise((resolve) => {
-        exec(`attrib +h "${folderPath}"`, () => {
-            exec(`attrib +h "${folderPath}\\*" /s /d`, () => resolve());
-        });
+        exec(`attrib +h "${folderPath}"`, () => resolve());
     });
 }
 
