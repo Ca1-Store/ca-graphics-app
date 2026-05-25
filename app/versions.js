@@ -12,7 +12,7 @@ const packs = [
     {
         id: "CA3", plan: "CA-3", name: "CA - Pack 3", level: 3,
         images: ["../assets/ca333.png","../assets/ca3.png","../assets/ca33.png"],
-        url: "https://drive.google.com/uc?export=download&id=1fkXvmwykykmbGhPmfbWNOd9ONG1FpP2x"
+        url: "https://drive.google.com/uc?export=download&id=1p3tCjRyTLGkbXBnlolUsnbEt7jBsZjTm"
     }
 ];
 
