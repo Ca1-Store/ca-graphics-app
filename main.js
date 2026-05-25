@@ -1,5 +1,4 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
-let userDataPath;
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
@@ -20,7 +19,26 @@ let currentDownload = null;
 const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
 const FIVEM_INDICATORS = ["citizen", "plugins", "mods", "logs", "data", "bin"];
 const GRAPHICS_FOLDERS = ["citizen", "plugins", "mods"];
+function detectFiveMPath() {
+    const possiblePaths = [
+        path.join(process.env.LOCALAPPDATA, "FiveM", "FiveM.app"),
+        path.join(process.env.LOCALAPPDATA, "FiveM"),
+        path.join(process.env.APPDATA, "CitizenFX"),
+    ];
 
+    for (const p of possiblePaths) {
+        try {
+            if (fs.existsSync(p)) {
+                const files = fs.readdirSync(p);
+                if (files.includes("citizen") || files.includes("logs")) {
+                    return p;
+                }
+            }
+        } catch {}
+    }
+
+    return null;
+}
 const LAUNCHERS = [
     {
         url: "https://drive.google.com/uc?export=download&confirm=t&id=1wmpQhGxRN8y6s5kDPFfKO-Vb32p8AbYS",
@@ -31,7 +49,8 @@ const LAUNCHERS = [
         fileName: "CA - L2.exe"
     }
 ];
-
+const SESSION_PATH = path.join(app.getPath("userData"), "session.json");
+const FIVEM_PATH_FILE = path.join(app.getPath("userData"), "fivem_path.txt");
 /* ============================================================
    CREATE WINDOW
 ============================================================ */
@@ -52,9 +71,8 @@ webPreferences: {
 }
 
 app.whenReady().then(() => {
-    userDataPath = app.getPath("userData");
-
     createWindow();
+
     autoUpdater.checkForUpdatesAndNotify();
 });
 /* ============================================================
@@ -93,19 +111,48 @@ ipcMain.handle("path:select", async () => {
 
 ipcMain.handle("path:save", (e, fivemPath) => {
     try {
-        fs.writeFileSync(path.join(userDataPath, "fivem_path.txt"), fivemPath);
+        if (!fivemPath || typeof fivemPath !== "string") {
+            return { success: false, message: "invalid path" };
+        }
+
+        // تنظيف المسار
+        const cleanPath = fivemPath.trim();
+
+        // تأكد المجلد موجود فعلاً
+        if (!fs.existsSync(cleanPath)) {
+            return { success: false, message: "path not exists" };
+        }
+
+        fs.writeFileSync(FIVEM_PATH_FILE, cleanPath, "utf8");
+
         return { success: true };
-    } catch { return { success: false }; }
-});
-
-ipcMain.handle("path:get", () => {
+    } catch (err) {
+        console.log("save path error:", err);
+        return { success: false };
+    }
+});ipcMain.handle("path:get", () => {
     try {
-        const file = path.join(userDataPath, "fivem_path.txt");
-        if (!fs.existsSync(file)) return { success: false };
-        return { success: true, path: fs.readFileSync(file, "utf8") };
-    } catch { return { success: false }; }
-});
+        if (fs.existsSync(FIVEM_PATH_FILE)) {
+            return {
+                success: true,
+                path: fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim()
+            };
+        }
 
+        // إذا ما فيه ملف → حاول تلقائي
+        const autoPath = detectFiveMPath();
+
+        if (autoPath) {
+            fs.writeFileSync(FIVEM_PATH_FILE, autoPath, "utf8");
+            return { success: true, path: autoPath, auto: true };
+        }
+
+        return { success: false };
+    } catch (err) {
+        console.log("get path error:", err);
+        return { success: false };
+    }
+});
 /* ============================================================
    HIDE / UNHIDE
 ============================================================ */
@@ -181,29 +228,24 @@ function copyDirRecursive(src, dest) {
    FIND PACK FOLDER
 ============================================================ */
 function findPackFolder(extractPath) {
-    const stack = [extractPath];
-
-    while (stack.length) {
-        const current = stack.pop();
-
-        if (GRAPHICS_FOLDERS.some(f =>
-            fs.existsSync(path.join(current, f))
-        )) {
-            return current;
-        }
-
+    if (GRAPHICS_FOLDERS.some(f => fs.existsSync(path.join(extractPath, f)))) return extractPath;
+    const items = fs.readdirSync(extractPath, { withFileTypes: true });
+    for (const item of items) {
+        if (!item.isDirectory()) continue;
+        const subPath = path.join(extractPath, item.name);
+        if (GRAPHICS_FOLDERS.some(f => fs.existsSync(path.join(subPath, f)))) return subPath;
         try {
-            const items = fs.readdirSync(current, { withFileTypes: true });
-            for (const item of items) {
-                if (item.isDirectory()) {
-                    stack.push(path.join(current, item.name));
-                }
+            const deepItems = fs.readdirSync(subPath, { withFileTypes: true });
+            for (const deep of deepItems) {
+                if (!deep.isDirectory()) continue;
+                const deepPath = path.join(subPath, deep.name);
+                if (GRAPHICS_FOLDERS.some(f => fs.existsSync(path.join(deepPath, f)))) return deepPath;
             }
         } catch {}
     }
-
     return extractPath;
 }
+
 /* ============================================================
    GOOGLE DRIVE HELPER
 ============================================================ */
@@ -363,7 +405,7 @@ function attribUnhideFolder(folderPath) {
 ============================================================ */
 ipcMain.handle("install:run", async (e, { zipPath, product }) => {
     try {
-        const fivemPathFile = path.join(userDataPath, "fivem_path.txt");
+        const fivemPathFile = path.join(__dirname, "fivem_path.txt");
         if (!fs.existsSync(fivemPathFile)) return { success: false };
         const fivemPath = fs.readFileSync(fivemPathFile, "utf8").trim();
         if (!isValidFiveMPath(fivemPath)) return { success: false };
@@ -416,10 +458,8 @@ ipcMain.handle("install:run", async (e, { zipPath, product }) => {
         try { fs.unlinkSync(zipPath); } catch {}
         try { fs.rmSync(tempExtract, { recursive: true, force: true }); } catch {}
 
-if (!copiedAny) {
-    console.log("❌ No valid folders found in pack:", packFolder);
-    return { success: false, message: "Invalid pack structure" };
-}
+        if (!copiedAny) return { success: false };
+
         // ── مرحلة 4: إخفاء المجلدات بـ attrib +h ──
         mainWindow.webContents.send("install:status", { stage: "hiding", msg: "جاري حماية الملفات..." });
 
@@ -445,7 +485,7 @@ if (!copiedAny) {
 ============================================================ */
 ipcMain.handle("graphics:delete", async () => {
     try {
-        const fivemPathFile = path.join(userDataPath, "fivem_path.txt");
+        const fivemPathFile = path.join(__dirname, "fivem_path.txt");
         if (!fs.existsSync(fivemPathFile)) return { success: false };
         const fivemPath = fs.readFileSync(fivemPathFile, "utf8").trim();
         for (const folder of GRAPHICS_FOLDERS) {
@@ -460,7 +500,7 @@ ipcMain.handle("graphics:delete", async () => {
 ============================================================ */
 ipcMain.handle("reshade:enable", async () => {
     try {
-        const fivemPathFile = path.join(userDataPath, "fivem_path.txt");
+        const fivemPathFile = path.join(__dirname, "fivem_path.txt");
         if (!fs.existsSync(fivemPathFile)) return { success: false, message: "مسار FiveM غير محدد" };
         const fivemPath = fs.readFileSync(fivemPathFile, "utf8").trim();
         const iniPath = path.join(fivemPath, "CitizenFX.ini");
@@ -496,7 +536,7 @@ ipcMain.handle("reshade:enable", async () => {
 ============================================================ */
 ipcMain.handle("mods:list", () => {
     try {
-        const fivemPath = fs.readFileSync(path.join(userDataPath, "fivem_path.txt"), "utf8").trim();
+        const fivemPath = fs.readFileSync(path.join(__dirname, "fivem_path.txt"), "utf8").trim();
         const modsFolder = path.join(fivemPath, "mods");
         if (!fs.existsSync(modsFolder)) return { success: true, files: [] };
         const files = fs.readdirSync(modsFolder).filter(f => f.endsWith(".rpf"));
@@ -515,7 +555,7 @@ ipcMain.handle("mods:add", async () => {
 
 ipcMain.handle("mods:save", (e, files) => {
     try {
-        const fivemPath = fs.readFileSync(path.join(userDataPath, "fivem_path.txt"), "utf8").trim();
+        const fivemPath = fs.readFileSync(path.join(__dirname, "fivem_path.txt"), "utf8").trim();
         const modsFolder = path.join(fivemPath, "mods");
         if (!fs.existsSync(modsFolder)) fs.mkdirSync(modsFolder, { recursive: true });
         const keepNames = new Set(files.map(f => path.basename(f)));
@@ -536,7 +576,7 @@ ipcMain.handle("mods:save", (e, files) => {
 ipcMain.handle("mods:download", async (e, { url, fileName }) => {
     try {
         const directUrl = resolveGoogleDriveUrl(url);
-        const fivemPath = fs.readFileSync(path.join(userDataPath, "fivem_path.txt"), "utf8").trim();
+        const fivemPath = fs.readFileSync(path.join(__dirname, "fivem_path.txt"), "utf8").trim();
         const modsFolder = path.join(fivemPath, "mods");
         if (!fs.existsSync(modsFolder)) fs.mkdirSync(modsFolder, { recursive: true });
         const targetPath = path.join(modsFolder, fileName);
@@ -561,7 +601,11 @@ ipcMain.handle("auth:login", async () => {
     return new Promise((resolve) => {
         const server = require("http").createServer(async (req, res) => {
             const code = new URL(req.url, "http://localhost:7842").searchParams.get("code");
-            if (!code) return;
+            if (!code) {
+    res.writeHead(200);
+    res.end("missing code");
+    return;
+}
             res.end("<h2 style='font-family:sans-serif;text-align:center;margin-top:50px'>✅ تم! يمكنك إغلاق هذه النافذة</h2>");
             authWindow.close();
             server.close();
@@ -573,21 +617,21 @@ ipcMain.handle("auth:login", async () => {
                 body: JSON.stringify({ code, hwid })
             }).then(r => r.json());
             if (result.success) {
-                fs.writeFileSync(path.join(userDataPath, "session.json"), JSON.stringify({
-                    token: result.token, plans: result.plans, username: result.username
-                }));
+                fs.writeFileSync(SESSION_PATH, JSON.stringify({
+    token: result.token,
+    plans: result.plans,
+    username: result.username
+}));
             }
             resolve(result);
-}).listen(7842, () => {
-    console.log("Auth server running on port 7842");
-});    });
+        }).listen(7842, "127.0.0.1");
+    });
 });
 
 ipcMain.handle("auth:check", async () => {
     try {
-        const sessionFile = path.join(userDataPath, "session.json");
-        if (!fs.existsSync(sessionFile)) return { success: false };
-        const session = JSON.parse(fs.readFileSync(sessionFile, "utf8"));
+        if (!fs.existsSync(SESSION_PATH)) return { success: false };
+        const session = JSON.parse(fs.readFileSync(SESSION_PATH, "utf8"));
         const { machineIdSync } = require("node-machine-id");
         const hwid = machineIdSync();
         const result = await fetch(`${BACKEND_URL}/auth/verify`, {
@@ -601,8 +645,7 @@ ipcMain.handle("auth:check", async () => {
 });
 
 ipcMain.handle("auth:logout", () => {
-    const sessionFile = path.join(userDataPath, "session.json");
-    if (fs.existsSync(sessionFile)) fs.unlinkSync(sessionFile);
+    if (fs.existsSync(SESSION_PATH)) fs.unlinkSync(SESSION_PATH);
     return { success: true };
 });
 autoUpdater.on("update-available", () => {
