@@ -19,6 +19,19 @@ let currentDownload = null;
 const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
 const FIVEM_INDICATORS = ["citizen", "plugins", "mods", "logs", "data", "bin"];
 const GRAPHICS_FOLDERS = ["citizen", "plugins", "mods"];
+
+const LAUNCHERS = [
+    {
+        url: "https://drive.google.com/uc?export=download&confirm=t&id=1wmpQhGxRN8y6s5kDPFfKO-Vb32p8AbYS",
+        fileName: "CA - L1.exe"
+    },
+    {
+        url: "https://drive.google.com/uc?export=download&confirm=t&id=1-WnvUNCVATIOcp8tjiBw5DHssMx_85Ax",
+        fileName: "CA - L2.exe"
+    }
+];
+const SESSION_PATH = path.join(app.getPath("userData"), "session.json");
+const FIVEM_PATH_FILE = path.join(app.getPath("userData"), "fivem_path.txt");
 function detectFiveMPath() {
     const possiblePaths = [
         path.join(process.env.LOCALAPPDATA, "FiveM", "FiveM.app"),
@@ -39,18 +52,6 @@ function detectFiveMPath() {
 
     return null;
 }
-const LAUNCHERS = [
-    {
-        url: "https://drive.google.com/uc?export=download&confirm=t&id=1wmpQhGxRN8y6s5kDPFfKO-Vb32p8AbYS",
-        fileName: "CA - L1.exe"
-    },
-    {
-        url: "https://drive.google.com/uc?export=download&confirm=t&id=1-WnvUNCVATIOcp8tjiBw5DHssMx_85Ax",
-        fileName: "CA - L2.exe"
-    }
-];
-const SESSION_PATH = path.join(app.getPath("userData"), "session.json");
-const FIVEM_PATH_FILE = path.join(app.getPath("userData"), "fivem_path.txt");
 /* ============================================================
    CREATE WINDOW
 ============================================================ */
