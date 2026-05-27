@@ -14,6 +14,12 @@ const packs = [
         images: ["../assets/ca333.png","../assets/ca3.png","../assets/ca33.png"],
         url: "https://drive.google.com/uc?export=download&id=1p3tCjRyTLGkbXBnlolUsnbEt7jBsZjTm"
     }
+       , {
+        id: "CA4", plan: "CA-4", name: "CA - Pack 4", level: 4,
+        images: ["../assets/ca444.png","../assets/ca4.png","../assets/ca44.png"],
+        url: "https://drive.google.com/uc?export=download&id=1UsYRgYfvJLkHMxUvbP_qzmyQd_GT1cEb"
+    }
+
 ];
 
 const packsContainer = document.getElementById("packsContainer");
