@@ -7,7 +7,7 @@ const packs = [
     {
         id: "CA2", plan: "CA-2", name: "CA - Pack 2", level: 2,
         images: ["../assets/Ca-Pack.png","../assets/Ca-2v2.png","../assets/Ca_Store.png"],
-        url: "https://drive.google.com/uc?export=download&id=1q5bAjZY18becBhIbxVhDz1NZh46Fx_VO"
+        url: "https://drive.google.com/uc?export=download&id=1ElRtHGpzdphMV5bznc0W2Fy8_2vxEHoN"
     },
     {
         id: "CA3", plan: "CA-3", name: "CA - Pack 3", level: 3,
