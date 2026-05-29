@@ -9,6 +9,7 @@ const emptyMsg  = document.getElementById("emptyMsg");
 const historyEl = document.getElementById("downloadHistory");
 
 let downloadHistory = JSON.parse(localStorage.getItem("download_history") || "[]");
+let pollTimer = null; // مؤقت الـ polling
 
 /* ============================================================
    STEPS
@@ -46,6 +47,37 @@ function showBox(name) {
 function hideBox() {
     if (box) box.style.display = "none";
     if (emptyMsg) emptyMsg.style.display = "block";
+    stopPolling();
+}
+
+/* ============================================================
+   POLLING - يسأل main process عن الحالة كل ثانية
+   هذا يضمن إن الصفحة تعرض الحالة الصحيحة دايماً
+   حتى بعد الانتقال وبالرجوع
+============================================================ */
+function startPolling(name) {
+    if (pollTimer) clearInterval(pollTimer);
+
+    pollTimer = setInterval(async () => {
+        const state = await window.api.getDownloadState();
+
+        if (!state || (!state.running && (state.stage === "done" || state.stage === "error" || !state.stage))) {
+            stopPolling();
+            return;
+        }
+
+        // حدّث الـ UI بالحالة الحالية
+        setProgress(state.percent, state.speed + " MB/s");
+        applyStageUI(state.stage);
+
+    }, 800); // كل 0.8 ثانية
+}
+
+function stopPolling() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
 }
 
 /* ============================================================
@@ -80,17 +112,15 @@ function renderHistory() {
 }
 
 /* ============================================================
-   تحويل stage → عرض مناسب
+   APPLY STAGE UI فقط (بدون setProgress)
 ============================================================ */
-function applyStage(stage, percent, speed) {
-    setProgress(percent, speed ? speed + " MB/s" : "—");
-
+function applyStageUI(stage) {
     if (stage === "downloading") {
         setStep("download");
         setStatus("جاري التحميل...", "#7cb0ff", "#4f8cff");
-    } else if (stage === "installing" || stage === "preparing") {
+    } else if (stage === "preparing" || stage === "installing") {
         setStep("extract");
-        setStatus("جاري التثبيت...", "#a78bfa", "#7c5cff");
+        setStatus("جاري التحضير...", "#a78bfa", "#7c5cff");
     } else if (stage === "extracting") {
         setStep("extract");
         setStatus("جاري فك الضغط...", "#7cb0ff", "#4f8cff");
@@ -112,17 +142,19 @@ function applyStage(stage, percent, speed) {
 }
 
 /* ============================================================
-   LISTENERS - يسجّل مرة وحدة
+   REGISTER LISTENERS
 ============================================================ */
 function registerListeners(pending) {
+    // ✅ removeAllListeners يصير في preload - هنا فقط نسجّل
     window.api.onDownloadProgress(data => {
         setProgress(data.percent, data.speed + " MB/s");
     });
 
     window.api.onInstallStatus(data => {
-        applyStage(data.stage, 100, null);
+        applyStageUI(data.stage);
 
         if (data.stage === "done") {
+            stopPolling();
             const name = (pending && pending.name) || localStorage.getItem("active_download_name") || "—";
             downloadHistory.push({ name, date: new Date().toLocaleString("ar") });
             localStorage.setItem("download_history", JSON.stringify(downloadHistory));
@@ -135,12 +167,12 @@ function registerListeners(pending) {
 }
 
 /* ============================================================
-   INIT - المنطق الكامل
+   INIT
 ============================================================ */
 async function init() {
     renderHistory();
 
-    /* ── 1. هل فيه تحميل جديد pending؟ ── */
+    /* ── 1. فيه تحميل جديد pending؟ ── */
     const raw = localStorage.getItem("pending_download");
 
     if (raw) {
@@ -151,7 +183,6 @@ async function init() {
         registerListeners(pending);
         showBox(pending.name || "جاري التحميل...");
 
-        // حذف القديمة
         if (pending.deleteFirst && pending.type === "pack") {
             setStatus("جاري حذف الجرافيكس القديمة...", "#ffb347", "#ffb347");
             setStep("download");
@@ -162,9 +193,13 @@ async function init() {
         setStatus("جاري التحميل...", "#7cb0ff", "#4f8cff");
         setProgress(0, "0 MB/s");
 
+        // ✅ ابدأ الـ polling فوراً عشان لو انتقل وبعدين رجع يشوف الحالة
+        startPolling(pending.name);
+
         const result = await window.api.startDownload(pending.url, pending.productId);
 
         if (!result.success) {
+            stopPolling();
             setStatus("❌ فشل التحميل", "#ff4d6a", "#ff4d6a");
             if (statusDot) statusDot.style.animation = "none";
             localStorage.removeItem("active_download_name");
@@ -178,6 +213,7 @@ async function init() {
         if (pending.type === "pack") {
             const install = await window.api.runInstall(result.zipPath, pending.productId);
             if (!install.success) {
+                stopPolling();
                 setStatus("❌ فشل التثبيت", "#ff4d6a", "#ff4d6a");
                 if (statusDot) statusDot.style.animation = "none";
                 localStorage.removeItem("active_download_name");
@@ -188,6 +224,7 @@ async function init() {
             setStep("install");
             setStatus("جاري تثبيت الـ Mod...", "#a78bfa", "#7c5cff");
             await window.api.downloadMod(pending.url, pending.fileName || pending.productId);
+            stopPolling();
             setStep("done");
             setStatus("تم ✅", "#00ffae", "#00ffae");
             if (statusDot) statusDot.style.animation = "none";
@@ -202,17 +239,23 @@ async function init() {
     }
 
     /* ── 2. لا pending - اسأل main process عن الحالة ── */
-    registerListeners(null);
-
     const state = await window.api.getDownloadState();
     const name  = localStorage.getItem("active_download_name") || "جاري التحميل...";
 
-    if (state && (state.running || (state.stage && state.stage !== "done" && state.stage !== "error" && state.stage !== null))) {
-        // ✅ فيه تحميل شغّال - اعرضه فوراً
+    if (state && state.running) {
+        // ✅ فيه تحميل شغّال - اعرضه وابدأ polling
         showBox(name);
-        applyStage(state.stage, state.percent, state.speed);
+        applyStageUI(state.stage);
+        setProgress(state.percent, state.speed + " MB/s");
+        registerListeners(null);
+        startPolling(name);
+    } else if (state && state.stage && state.stage !== "done" && state.stage !== "error") {
+        // مرحلة تثبيت
+        showBox(name);
+        applyStageUI(state.stage);
+        registerListeners(null);
+        startPolling(name);
     } else {
-        // لا شيء
         hideBox();
     }
 }

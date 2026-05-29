@@ -2,69 +2,62 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("api", {
 
-    /* ===============================
-        WINDOW CONTROLS
-    ================================ */
-    minimize: () => ipcRenderer.invoke("window:minimize"),
-    close: () => ipcRenderer.invoke("window:close"),
+    minimize:   () => ipcRenderer.invoke("window:minimize"),
+    close:      () => ipcRenderer.invoke("window:close"),
     fullscreen: () => ipcRenderer.invoke("window:fullscreen"),
 
-    /* ===============================
-        PAGE NAVIGATION
-    ================================ */
     openPage: (page) => ipcRenderer.invoke("open:page", page),
 
-    /* ===============================
-        FIVEM PATH
-    ================================ */
-    selectFolder: () => ipcRenderer.invoke("path:select"),
-    saveFiveMPath: (path) => ipcRenderer.invoke("path:save", path),
-    getFiveMPath: () => ipcRenderer.invoke("path:get"),
-    validateFiveMPath: (path) => ipcRenderer.invoke("path:validate", path),
+    selectFolder:       ()  => ipcRenderer.invoke("path:select"),
+    saveFiveMPath: (p)      => ipcRenderer.invoke("path:save", p),
+    getFiveMPath:       ()  => ipcRenderer.invoke("path:get"),
+    validateFiveMPath:  (p) => ipcRenderer.invoke("path:validate", p),
 
-    /* ===============================
-        DOWNLOAD SYSTEM
-    ================================ */
+    /* ── Download ── */
     startDownload: (url, product) =>
         ipcRenderer.invoke("download:start", { url, product }),
 
-    onDownloadProgress: (callback) =>
-        ipcRenderer.on("download:progress", (e, data) => callback(data)),
+    downloadLaunchers: () =>
+        ipcRenderer.invoke("download:launchers"),
 
-    onDownloadDone: (callback) =>
-        ipcRenderer.on("download:done", (e, data) => callback(data)),
+    getDownloadState: () =>
+        ipcRenderer.invoke("download:getState"),
 
-    /* ===============================
-        INSTALL SYSTEM
-    ================================ */
+    // ✅ يمسح الـ listeners القديمة قبل ما يسجّل جديدة
+    onDownloadProgress: (cb) => {
+        ipcRenderer.removeAllListeners("download:progress");
+        ipcRenderer.on("download:progress", (_, d) => cb(d));
+    },
+
+    onDownloadDone: (cb) => {
+        ipcRenderer.removeAllListeners("download:done");
+        ipcRenderer.on("download:done", (_, d) => cb(d));
+    },
+
+    /* ── Install ── */
     runInstall: (zipPath, product) =>
         ipcRenderer.invoke("install:run", { zipPath, product }),
 
-    onInstallStatus: (callback) =>
-        ipcRenderer.on("install:status", (e, data) => callback(data)),
+    onInstallStatus: (cb) => {
+        ipcRenderer.removeAllListeners("install:status");
+        ipcRenderer.on("install:status", (_, d) => cb(d));
+    },
 
-    /* ===============================
-        GRAPHICS MANAGEMENT
-    ================================ */
+    /* ── Graphics ── */
     deleteGraphics: () => ipcRenderer.invoke("graphics:delete"),
-    enableReshade: () => ipcRenderer.invoke("reshade:enable"),
+    enableReshade:  () => ipcRenderer.invoke("reshade:enable"),
 
-    /* ===============================
-        MODS MANAGEMENT
-    ================================ */
-    getModsList: () => ipcRenderer.invoke("mods:list"),
-    addModFile: () => ipcRenderer.invoke("mods:add"),
-    saveMods: (files) => ipcRenderer.invoke("mods:save", files),
-    downloadMod: (url, fileName) =>
+    /* ── Mods ── */
+    getModsList:  ()           => ipcRenderer.invoke("mods:list"),
+    addModFile:   ()           => ipcRenderer.invoke("mods:add"),
+    saveMods:     (files)      => ipcRenderer.invoke("mods:save", files),
+    downloadMod:  (url, fileName) =>
         ipcRenderer.invoke("mods:download", { url, fileName }),
 
-    /* ===============================
-        AUTH - Discord OAuth2
-    ================================ */
+    /* ── Auth ── */
     auth: {
-        login: () => ipcRenderer.invoke("auth:login"),
-        check: () => ipcRenderer.invoke("auth:check"),
+        login:  () => ipcRenderer.invoke("auth:login"),
+        check:  () => ipcRenderer.invoke("auth:check"),
         logout: () => ipcRenderer.invoke("auth:logout"),
     }
-
 });

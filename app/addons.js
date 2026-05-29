@@ -34,7 +34,8 @@ const sections = [
         mods: [
             { name: "European Roads", file: "European_Roads.rpf", img: "../assets/Europe.png", url: "https://drive.google.com/uc?export=download&id=1ZpFqPzoDpi1VYRlloXxGvkQ7oKhb1fkB" },
             { name: "German Roads", file: "German_Roads.rpf", img: "../assets/German_Roads.png", url: "https://drive.google.com/uc?export=download&id=1x5KQkcn0-jtBn95BgoB3g0qDnv00Onb0" },
-            { name: "NVE Roads", file: "NVE_Roads.rpf", img: "../assets/nve.png", url: "https://drive.google.com/uc?export=download&id=1XaoPv5U8IXQt7Ixkw7btD8Fl6wnKshsr" }
+            { name: "NVE Roads", file: "NVE_Roads.rpf", img: "../assets/nve.png", url: "https://drive.google.com/uc?export=download&id=1XaoPv5U8IXQt7Ixkw7btD8Fl6wnKshsr" },
+            { name: "Liberty Roads", file: "Liberty Roads.rpf", img: "../assets/Liberty.png", url: "https://drive.google.com/uc?export=download&id=1f4_2jZjRhR2NHnkklQbEt46opiy1-yx4" }
         ]
     },
     {
