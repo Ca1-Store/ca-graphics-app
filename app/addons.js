@@ -30,7 +30,7 @@ const sections = [
         title: "Roads",
         subtitle: "تحتاج أي نسخة",
         icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17L9 3l6 14"/><path d="M6 11h6"/></svg>`,
-        requiredPlans: ["CA-1", "CA-2", "CA-3"],
+        requiredPlans: ["CA-1", "CA-2", "CA-3" ,"CA-4"],
         mods: [
             { name: "European Roads", file: "European_Roads.rpf", img: "../assets/Europe.png", url: "https://drive.google.com/uc?export=download&id=1ZpFqPzoDpi1VYRlloXxGvkQ7oKhb1fkB" },
             { name: "German Roads", file: "German_Roads.rpf", img: "../assets/German_Roads.png", url: "https://drive.google.com/uc?export=download&id=1x5KQkcn0-jtBn95BgoB3g0qDnv00Onb0" },
@@ -42,7 +42,7 @@ const sections = [
         title: "Vegetation",
         subtitle: "تحتاج النسخة الثانية أو الثالثة",
         icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22V12"/><path d="M12 12C12 7 7 4 7 4s0 5 5 8"/><path d="M12 12c0-5 5-8 5-8s0 5-5 8"/></svg>`,
-        requiredPlans: ["CA-2", "CA-3"],
+        requiredPlans: ["CA-2", "CA-3" ,"CA-4"],
         mods: [
             { name: "Extra Vegetation", file: "Extra_Vegetation.rpf", img: "../assets/Extra.png", url: "https://drive.google.com/uc?export=download&id=10PTPKV2U8-vvh2bj-GIrbtGGWOQ0vr1B" },
             { name: "Sandy Shores Vegetation", file: "Sandy_Shores_Vegetation.rpf", img: "../assets/Sandy.png", url: "https://drive.google.com/uc?export=download&id=1slz65IDGFfStFTdMSGKIJ5joVURBNZzD" }
@@ -52,7 +52,7 @@ const sections = [
         title: "Addons",
         subtitle: "تحتاج النسخة الثانية أو الثالثة",
         icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="5" height="5"/><rect x="10" y="3" width="5" height="5"/><rect x="3" y="10" width="5" height="5"/><rect x="10" y="10" width="5" height="5"/></svg>`,
-        requiredPlans: ["CA-2", "CA-3"],
+        requiredPlans: ["CA-2", "CA-3" ,"CA-4"],
         mods: [
             { name: "Halloween Content Pack", file: "Halloween_Content_Pack.rpf", img: "../assets/Halloween Content Pack.jpg", url: "https://drive.google.com/uc?export=download&id=1lsCxPLncy3InVult9mnmUbz6uIfPxHGx" },
             { name: "Christmas Content Pack", file: "Christmas_Content_Pack.rpf", img: "../assets/Christmas Content Pack.jpg", url: "https://drive.google.com/uc?export=download&id=1Ue47E5ZPf1FWhAEZKvNWGaMtYAYothVf" },
