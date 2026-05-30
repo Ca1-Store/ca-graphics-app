@@ -1,3 +1,7 @@
+/* ============================================================
+   DOWNLOADS PAGE - نظام تحميل محسّن مع polling
+============================================================ */
+
 const box       = document.getElementById("downloadBox");
 const bar       = document.getElementById("progressBar");
 const pct       = document.getElementById("progressPercent");
@@ -9,27 +13,25 @@ const emptyMsg  = document.getElementById("emptyMsg");
 const historyEl = document.getElementById("downloadHistory");
 
 let downloadHistory = JSON.parse(localStorage.getItem("download_history") || "[]");
-let pollTimer = null; // مؤقت الـ polling
+let pollTimer = null;
 
-/* ============================================================
-   STEPS
-============================================================ */
+/* ── STEPS ── */
 const STEPS = ["download", "extract", "install", "hide", "done"];
 
-function setStep(stepName) {
+function setStep(name) {
     STEPS.forEach(s => {
         const el = document.getElementById(`step-${s}`);
         if (!el) return;
         el.className = "dl-step";
-        const idx = STEPS.indexOf(s), ai = STEPS.indexOf(stepName);
-        if (idx < ai) el.classList.add("done");
-        else if (idx === ai) el.classList.add("active");
+        const i = STEPS.indexOf(s), ai = STEPS.indexOf(name);
+        if (i < ai) el.classList.add("done");
+        else if (i === ai) el.classList.add("active");
     });
 }
 
 function setStatus(msg, color = "#7cb0ff", dot = "#4f8cff") {
     if (dlStatus) { dlStatus.textContent = msg; dlStatus.style.color = color; }
-    if (statusDot) statusDot.style.background = dot;
+    if (statusDot) { statusDot.style.background = dot; statusDot.style.animation = "pulse-dot 1.4s ease infinite"; }
 }
 
 function setProgress(percent, speed = null) {
@@ -50,44 +52,53 @@ function hideBox() {
     stopPolling();
 }
 
-/* ============================================================
-   POLLING - يسأل main process عن الحالة كل ثانية
-   هذا يضمن إن الصفحة تعرض الحالة الصحيحة دايماً
-   حتى بعد الانتقال وبالرجوع
-============================================================ */
-function startPolling(name) {
+/* ── POLLING ── */
+function startPolling() {
     if (pollTimer) clearInterval(pollTimer);
-
     pollTimer = setInterval(async () => {
         const state = await window.api.getDownloadState();
-
-        if (!state || (!state.running && (state.stage === "done" || state.stage === "error" || !state.stage))) {
+        if (!state || (!state.running && (!state.stage || state.stage === "done" || state.stage === "error"))) {
             stopPolling();
             return;
         }
-
-        // حدّث الـ UI بالحالة الحالية
-        setProgress(state.percent, state.speed + " MB/s");
-        applyStageUI(state.stage);
-
-    }, 800); // كل 0.8 ثانية
+        applyStage(state.stage, state.percent, state.speed);
+    }, 800);
 }
 
 function stopPolling() {
-    if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+/* ── APPLY STAGE ── */
+function applyStage(stage, percent = 0, speed = null) {
+    if (percent !== null) setProgress(percent, speed ? speed + " MB/s" : null);
+
+    const stageMap = {
+        downloading: ["download",  "جاري التحميل...",       "#7cb0ff", "#4f8cff"],
+        preparing:   ["extract",   "جاري التحضير...",       "#a78bfa", "#7c5cff"],
+        extracting:  ["extract",   "جاري فك الضغط...",      "#7cb0ff", "#4f8cff"],
+        installing:  ["extract",   "جاري التثبيت...",       "#a78bfa", "#7c5cff"],
+        copying:     ["install",   "جاري نسخ الملفات...",   "#a78bfa", "#7c5cff"],
+        hiding:      ["hide",      "جاري حماية الملفات...", "#ffb347", "#ffb347"],
+        done:        ["done",      "تم بنجاح! ✅",           "#00ffae", "#00ffae"],
+        error:       ["download",  "❌ حدث خطأ",             "#ff4d6a", "#ff4d6a"],
+    };
+
+    const [step, msg, color, dot] = stageMap[stage] || ["download", stage, "#7cb0ff", "#4f8cff"];
+    setStep(step);
+    setStatus(msg, color, dot);
+
+    if (stage === "done" || stage === "error") {
+        if (statusDot) statusDot.style.animation = "none";
     }
 }
 
-/* ============================================================
-   RENDER HISTORY
-============================================================ */
+/* ── HISTORY ── */
 function renderHistory() {
     if (!historyEl) return;
     historyEl.innerHTML = "";
     if (!downloadHistory.length) {
-        historyEl.innerHTML = `<div style="padding:20px;text-align:center;color:#444;font-size:13px;">لا يوجد سجل تحميل</div>`;
+        historyEl.innerHTML = `<div style="padding:24px;text-align:center;color:#444;font-size:13px;">لا يوجد سجل تحميل</div>`;
         return;
     }
     [...downloadHistory].reverse().forEach(item => {
@@ -111,76 +122,53 @@ function renderHistory() {
     });
 }
 
-/* ============================================================
-   APPLY STAGE UI فقط (بدون setProgress)
-============================================================ */
-function applyStageUI(stage) {
-    if (stage === "downloading") {
-        setStep("download");
-        setStatus("جاري التحميل...", "#7cb0ff", "#4f8cff");
-    } else if (stage === "preparing" || stage === "installing") {
-        setStep("extract");
-        setStatus("جاري التحضير...", "#a78bfa", "#7c5cff");
-    } else if (stage === "extracting") {
-        setStep("extract");
-        setStatus("جاري فك الضغط...", "#7cb0ff", "#4f8cff");
-    } else if (stage === "copying") {
-        setStep("install");
-        setStatus("جاري نسخ الملفات...", "#a78bfa", "#7c5cff");
-    } else if (stage === "hiding") {
-        setStep("hide");
-        setStatus("جاري حماية الملفات...", "#ffb347", "#ffb347");
-    } else if (stage === "done") {
-        setStep("done");
-        setStatus("تم بنجاح! ✅", "#00ffae", "#00ffae");
-        setProgress(100, "مكتمل");
-        if (statusDot) statusDot.style.animation = "none";
-    } else if (stage === "error") {
-        setStatus("❌ فشل", "#ff4d6a", "#ff4d6a");
-        if (statusDot) statusDot.style.animation = "none";
-    }
+function saveHistory(name) {
+    downloadHistory.push({ name, date: new Date().toLocaleString("ar") });
+    localStorage.setItem("download_history", JSON.stringify(downloadHistory));
+    localStorage.setItem("last_update", new Date().toLocaleString());
+    renderHistory();
 }
 
-/* ============================================================
-   REGISTER LISTENERS
-============================================================ */
-function registerListeners(pending) {
-    // ✅ removeAllListeners يصير في preload - هنا فقط نسجّل
+/* ── REGISTER LISTENERS ── */
+function registerListeners(pendingName) {
     window.api.onDownloadProgress(data => {
         setProgress(data.percent, data.speed + " MB/s");
     });
 
     window.api.onInstallStatus(data => {
-        applyStageUI(data.stage);
-
+        applyStage(data.stage, null, null);
         if (data.stage === "done") {
             stopPolling();
-            const name = (pending && pending.name) || localStorage.getItem("active_download_name") || "—";
-            downloadHistory.push({ name, date: new Date().toLocaleString("ar") });
-            localStorage.setItem("download_history", JSON.stringify(downloadHistory));
-            localStorage.setItem("last_update", new Date().toLocaleString());
-            localStorage.removeItem("active_download_name");
-            renderHistory();
+            setProgress(100, "مكتمل");
+            saveHistory(pendingName || localStorage.getItem("active_dl_name") || "—");
+            localStorage.removeItem("active_dl_name");
             setTimeout(hideBox, 5000);
         }
+        if (data.stage === "error") {
+            stopPolling();
+            localStorage.removeItem("active_dl_name");
+        }
+    });
+
+    // استقبال الحالة الكاملة لما تُفتح الصفحة من جديد
+    window.api.onDownloadStateSync(state => {
+        if (!state || (!state.running && (!state.stage || state.stage === "done" || state.stage === "error"))) return;
+        const name = localStorage.getItem("active_dl_name") || state.name || "جاري التحميل...";
+        showBox(name);
+        applyStage(state.stage, state.percent, state.speed);
     });
 }
 
-/* ============================================================
-   INIT
-============================================================ */
-async function init() {
-    renderHistory();
-
-    /* ── 1. فيه تحميل جديد pending؟ ── */
+/* ── MAIN FLOW ── */
+async function startPendingDownload() {
     const raw = localStorage.getItem("pending_download");
 
     if (raw) {
         const pending = JSON.parse(raw);
         localStorage.removeItem("pending_download");
-        localStorage.setItem("active_download_name", pending.name || "جاري التحميل...");
+        localStorage.setItem("active_dl_name", pending.name || "جاري التحميل...");
 
-        registerListeners(pending);
+        registerListeners(pending.name);
         showBox(pending.name || "جاري التحميل...");
 
         if (pending.deleteFirst && pending.type === "pack") {
@@ -192,72 +180,56 @@ async function init() {
         setStep("download");
         setStatus("جاري التحميل...", "#7cb0ff", "#4f8cff");
         setProgress(0, "0 MB/s");
+        startPolling();
 
-        // ✅ ابدأ الـ polling فوراً عشان لو انتقل وبعدين رجع يشوف الحالة
-        startPolling(pending.name);
-
-        const result = await window.api.startDownload(pending.url, pending.productId);
+        const result = await window.api.startDownload(pending.url, pending.productId, pending.name);
 
         if (!result.success) {
             stopPolling();
-            setStatus("❌ فشل التحميل", "#ff4d6a", "#ff4d6a");
-            if (statusDot) statusDot.style.animation = "none";
-            localStorage.removeItem("active_download_name");
+            applyStage("error");
+            localStorage.removeItem("active_dl_name");
             return;
         }
 
         setProgress(100, "—");
-        setStep("extract");
-        setStatus("جاري التثبيت...", "#a78bfa", "#7c5cff");
+        applyStage("extracting");
 
         if (pending.type === "pack") {
             const install = await window.api.runInstall(result.zipPath, pending.productId);
             if (!install.success) {
                 stopPolling();
-                setStatus("❌ فشل التثبيت", "#ff4d6a", "#ff4d6a");
-                if (statusDot) statusDot.style.animation = "none";
-                localStorage.removeItem("active_download_name");
+                applyStage("error");
+                localStorage.removeItem("active_dl_name");
             }
         }
 
         if (pending.type === "mod") {
-            setStep("install");
-            setStatus("جاري تثبيت الـ Mod...", "#a78bfa", "#7c5cff");
+            applyStage("copying");
             await window.api.downloadMod(pending.url, pending.fileName || pending.productId);
             stopPolling();
-            setStep("done");
-            setStatus("تم ✅", "#00ffae", "#00ffae");
-            if (statusDot) statusDot.style.animation = "none";
-            downloadHistory.push({ name: pending.name, date: new Date().toLocaleString("ar") });
-            localStorage.setItem("download_history", JSON.stringify(downloadHistory));
-            localStorage.removeItem("active_download_name");
-            renderHistory();
+            applyStage("done", 100, "مكتمل");
+            saveHistory(pending.name);
+            localStorage.removeItem("active_dl_name");
             setTimeout(hideBox, 5000);
         }
 
         return;
     }
 
-    /* ── 2. لا pending - اسأل main process عن الحالة ── */
+    /* ── لا pending - تحقق من حالة شغّالة ── */
+    registerListeners(null);
     const state = await window.api.getDownloadState();
-    const name  = localStorage.getItem("active_download_name") || "جاري التحميل...";
+    const name  = localStorage.getItem("active_dl_name") || "جاري التحميل...";
 
-    if (state && state.running) {
-        // ✅ فيه تحميل شغّال - اعرضه وابدأ polling
+    if (state && (state.running || (state.stage && state.stage !== "done" && state.stage !== "error"))) {
         showBox(name);
-        applyStageUI(state.stage);
-        setProgress(state.percent, state.speed + " MB/s");
-        registerListeners(null);
-        startPolling(name);
-    } else if (state && state.stage && state.stage !== "done" && state.stage !== "error") {
-        // مرحلة تثبيت
-        showBox(name);
-        applyStageUI(state.stage);
-        registerListeners(null);
-        startPolling(name);
+        applyStage(state.stage, state.percent, state.speed);
+        startPolling();
     } else {
         hideBox();
     }
 }
 
-init();
+/* ── INIT ── */
+renderHistory();
+startPendingDownload();

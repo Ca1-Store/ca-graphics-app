@@ -517,7 +517,6 @@ function renderModsList() {
 
         row.innerHTML = `
             <div style="display:flex;align-items:center;gap:10px;overflow:hidden;">
-                <img src="${modData?.img || ''}" style="width:42px;height:42px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#1a1e2a;">
                 <span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">${fileName}</span>
             </div>
             <button class="card-btn delete">Remove</button>

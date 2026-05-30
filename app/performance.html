@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ar">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CA Store - Performance</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .content {
+            direction: ltr;
+        }
+
+        .perf-hero {
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            padding: 30px;
+            border-radius: 26px;
+            margin-bottom: 22px;
+            background: linear-gradient(135deg, rgba(0,255,174,0.14), rgba(79,140,255,0.08));
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .perf-hero::before {
+            content: "";
+            position: absolute;
+            right: -120px;
+            top: -120px;
+            width: 320px;
+            height: 320px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0,255,174,0.18), transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 999px;
+            margin-bottom: 14px;
+            background: rgba(0,255,174,0.08);
+            border: 1px solid rgba(0,255,174,0.18);
+            color: #7dffd2;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .15em;
+            text-transform: uppercase;
+        }
+
+        .hero-title {
+            font-family: 'Syne', sans-serif;
+            font-size: 42px;
+            line-height: 1;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 14px;
+            letter-spacing: -.03em;
+        }
+
+        .hero-subtitle {
+            max-width: 650px;
+            color: rgba(255,255,255,0.55);
+            line-height: 1.8;
+            font-size: 14px;
+        }
+
+        .hero-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, rgba(0,255,174,0.18), rgba(79,140,255,0.08));
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 0 30px rgba(0,255,174,0.08);
+            color: #7dffd2;
+            flex-shrink: 0;
+        }
+
+        .perf-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 18px;
+        }
+
+        .glass-card {
+            position: relative;
+            overflow: hidden;
+            padding: 24px;
+            border-radius: 24px;
+            background: rgba(15,18,27,0.82);
+            border: 1px solid rgba(255,255,255,0.05);
+            backdrop-filter: blur(20px);
+        }
+
+        .glass-card::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(0,255,174,0.8), transparent);
+        }
+
+        .card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 22px;
+        }
+
+        .card-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+
+        .card-subtitle {
+            color: rgba(255,255,255,0.42);
+            font-size: 13px;
+        }
+
+        .card-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,255,174,0.1);
+            color: #7dffd2;
+            border: 1px solid rgba(0,255,174,0.16);
+            flex-shrink: 0;
+        }
+
+        .opt-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px;
+            border-radius: 16px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 12px;
+            transition: .2s ease;
+        }
+
+        .opt-item:hover {
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(0,255,174,0.2);
+        }
+
+        .opt-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .opt-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,255,174,0.08);
+            color: #7dffd2;
+        }
+
+        .opt-name {
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .opt-desc {
+            color: rgba(255,255,255,0.38);
+            font-size: 12px;
+        }
+
+        .perf-btn {
+            height: 42px;
+            padding: 0 20px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: .2s ease;
+            background: linear-gradient(135deg, #00ffae, #00d4a8);
+            color: #081016;
+            box-shadow: 0 8px 25px rgba(0,255,174,0.2);
+        }
+
+        .perf-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(0,255,174,0.3);
+        }
+
+        .perf-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .perf-btn.danger {
+            background: linear-gradient(135deg, #ff4d6a, #ff6b8a);
+            color: #fff;
+            box-shadow: 0 8px 25px rgba(255,77,106,0.2);
+        }
+
+        .perf-btn.danger:hover {
+            box-shadow: 0 12px 30px rgba(255,77,106,0.3);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(0,255,174,0.1);
+            color: #7dffd2;
+            border: 1px solid rgba(0,255,174,0.2);
+        }
+
+        .status-badge.warning {
+            background: rgba(255,179,71,0.1);
+            color: #ffb347;
+            border-color: rgba(255,179,71,0.2);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg"></div>
+
+    <div class="top-bar drag-region">
+        <button class="win-btn no-drag" onclick="window.api.minimize()">—</button>
+        <button class="win-btn no-drag" onclick="window.api.fullscreen()">□</button>
+        <button class="win-btn close no-drag" onclick="window.api.close()">×</button>
+    </div>
+
+    <div class="app-shell no-drag">
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div class="sidebar-logo-badge">CA</div>
+                <div class="sidebar-logo-text">
+                    <span>CA STORE</span>
+                    <span>Graphics Manager</span>
+                </div>
+            </div>
+
+            <div class="side-title">Store</div>
+
+            <div class="side-btn" onclick="window.api.openPage('index.html')">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M3 10.5L9 3l6 7.5v6H3z"></path>
+                </svg>
+                <span class="text">Overview</span>
+            </div>
+
+            <div class="side-btn" onclick="window.api.openPage('versions.html')">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="3" width="5" height="5"></rect>
+                    <rect x="10" y="3" width="5" height="5"></rect>
+                    <rect x="3" y="10" width="5" height="5"></rect>
+                    <rect x="10" y="10" width="5" height="5"></rect>
+                </svg>
+                <span class="text">Graphics Packs</span>
+            </div>
+
+            <div class="side-btn" onclick="window.api.openPage('addons.html')">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M9 2l3 3-3 3-3-3 3-3z"></path>
+                    <path d="M9 10l3 3-3 3-3-3 3-3z"></path>
+                </svg>
+                <span class="text">Mods</span>
+            </div>
+
+            <div class="side-btn" onclick="window.api.openPage('downloads.html')">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M9 2v9"></path>
+                    <path d="M5 8l4 4 4-4"></path>
+                    <path d="M4 15h10"></path>
+                </svg>
+                <span class="text">Downloads</span>
+            </div>
+
+            <div class="side-title">System</div>
+
+            <div class="side-btn active" onclick="window.api.openPage('performance.html')">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                </svg>
+                <span class="text">Performance</span>
+            </div>
+
+            <div class="side-btn" onclick="window.api.openPage('settings.html')">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <circle cx="9" cy="9" r="3"></circle>
+                    <path d="M15 10a1.5 1.5 0 0 0 .3 1.65l.05.05a1.8 1.8 0 1 1-2.55 2.55l-.05-.05A1.5 1.5 0 0 0 11 15.5V16a1.8 1.8 0 1 1-3.6 0v-.5A1.5 1.5 0 0 0 5.25 14.2l-.05.05a1.8 1.8 0 1 1-2.55-2.55l.05-.05A1.5 1.5 0 0 0 3 10V9.5A1.5 1.5 0 0 0 2.7 7.85l-.05-.05A1.8 1.8 0 1 1 5.2 5.25l.05.05A1.5 1.5 0 0 0 7.4 5h.5A1.5 1.5 0 0 0 9.55 3.7l.05-.05A1.8 1.8 0 1 1 12.15 6.2l-.05.05A1.5 1.5 0 0 0 11 7.5V9z"></path>
+                </svg>
+                <span class="text">Settings</span>
+            </div>
+
+            <div class="side-btn" onclick="logout()" style="margin-top:auto; color:#ff4d6a;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span class="text">Logout</span>
+            </div>
+        </aside>
+
+        <main class="content no-drag">
+            <div class="content-inner">
+                <div class="perf-hero">
+                    <div>
+                        <div class="hero-badge">PERFORMANCE CENTER</div>
+                        <div class="hero-title">FiveM Optimization</div>
+                        <div class="hero-subtitle">
+                            تحسين أداء FiveM وزيادة FPS من خلال أدوات تنظيف وتحسين متقدمة.
+                            احذف الملفات المؤقتة وحرر المساحة لتحسين تجربة اللعب.
+                        </div>
+                    </div>
+                    <div class="hero-circle">
+                        <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="perf-grid">
+                    <div class="glass-card">
+                        <div class="card-top">
+                            <div>
+                                <div class="card-title">Cleanup Tools</div>
+                                <div class="card-subtitle">أدوات تنظيف الملفات المؤقتة</div>
+                            </div>
+                            <div class="card-icon">
+                                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <path d="M3 6h18"></path>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">Clear Temp Files</div>
+                                    <div class="opt-desc">حذف ملفات temp المؤقتة</div>
+                                </div>
+                            </div>
+                            <button class="perf-btn" onclick="clearTempFiles()">Clean</button>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">Clear Cache</div>
+                                    <div class="opt-desc">حذف كاش FiveM</div>
+                                </div>
+                            </div>
+                            <button class="perf-btn" onclick="clearCache()">Clean</button>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">Clear Logs</div>
+                                    <div class="opt-desc">حذف ملفات السجلات</div>
+                                </div>
+                            </div>
+                            <button class="perf-btn danger" onclick="clearLogs()">Clean</button>
+                        </div>
+                    </div>
+
+                    <div class="glass-card">
+                        <div class="card-top">
+                            <div>
+                                <div class="card-title">System Info</div>
+                                <div class="card-subtitle">معلومات النظام</div>
+                            </div>
+                            <div class="card-icon">
+                                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                        <polyline points="22,6 12,13 2,6"></polyline>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">Disk Space</div>
+                                    <div class="opt-desc" id="diskSpace">Checking...</div>
+                                </div>
+                            </div>
+                            <div class="status-badge" id="diskBadge">—</div>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">FiveM Status</div>
+                                    <div class="opt-desc" id="fivemStatus">Checking...</div>
+                                </div>
+                            </div>
+                            <div class="status-badge" id="fivemBadge">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="notify" class="notification"></div>
+
+    <script src="performance.js"></script>
+    <script>
+        function logout() {
+            window.api.auth.logout().then(() => window.api.openPage("login.html"));
+        }
+    </script>
+</body>
+</html>

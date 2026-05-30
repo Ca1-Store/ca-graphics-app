@@ -11,39 +11,40 @@ try { unzipper = require("unzipper"); } catch { unzipper = null; }
 let mainWindow;
 
 /* ============================================================
-   حالة التحميل - تبقى محفوظة طول عمر البرنامج
+   DOWNLOAD STATE - يبقى محفوظ طول عمر البرنامج
 ============================================================ */
 const dlState = {
-    running: false,
-    percent: 0,
-    speed: "0",
-    product: null,
-    zipPath: null,
-    stage: null,
+    running:  false,
+    percent:  0,
+    speed:    "0",
+    product:  null,
+    zipPath:  null,
+    stage:    null,   // downloading | preparing | extracting | copying | hiding | done | error
     stageMsg: "",
-    pendingName: ""
+    name:     ""
 };
 
+/* ============================================================
+   CONSTANTS
+============================================================ */
 const BACKEND_URL      = "https://ca-backend-app-production.up.railway.app";
 const FIVEM_INDICATORS = ["citizen", "plugins", "mods", "logs", "data", "bin"];
 const GRAPHICS_FOLDERS = ["citizen", "plugins", "mods"];
 const SESSION_PATH     = path.join(app.getPath("userData"), "session.json");
 const FIVEM_PATH_FILE  = path.join(app.getPath("userData"), "fivem_path.txt");
-
 const LAUNCHERS = [
     { url: "https://drive.google.com/uc?export=download&confirm=t&id=1wmpQhGxRN8y6s5kDPFfKO-Vb32p8AbYS", fileName: "CA - L1.exe" },
     { url: "https://drive.google.com/uc?export=download&confirm=t&id=1-WnvUNCVATIOcp8tjiBw5DHssMx_85Ax", fileName: "CA - L2.exe" }
 ];
 
-function sendToRenderer(channel, data) {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+/* ============================================================
+   HELPERS
+============================================================ */
+function send(channel, data) {
+    if (mainWindow && !mainWindow.isDestroyed())
         mainWindow.webContents.send(channel, data);
-    }
 }
 
-/* ============================================================
-   AUTO DETECT FIVEM PATH
-============================================================ */
 function detectFiveMPath() {
     const candidates = [
         path.join(process.env.LOCALAPPDATA || "", "FiveM", "FiveM.app"),
@@ -59,8 +60,13 @@ function detectFiveMPath() {
     return null;
 }
 
+function isValidFiveMPath(p) {
+    try { return FIVEM_INDICATORS.some(f => fs.readdirSync(p).includes(f)); }
+    catch { return false; }
+}
+
 /* ============================================================
-   CREATE WINDOW
+   WINDOW
 ============================================================ */
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -75,20 +81,10 @@ function createWindow() {
     });
     mainWindow.loadFile(path.join(__dirname, "app", "index.html"));
 
-    // ✅ لما تتحمّل صفحة جديدة، أعد إرسال الحالة للـ renderer
+    // لما تتحمل صفحة جديدة أعد إرسال الحالة
     mainWindow.webContents.on("did-finish-load", () => {
-        if (dlState.running || dlState.stage === "installing") {
-            // أرسل الحالة الحالية للصفحة الجديدة
-            sendToRenderer("download:progress", {
-                percent: dlState.percent,
-                speed: dlState.speed
-            });
-            if (dlState.stage) {
-                sendToRenderer("install:status", {
-                    stage: dlState.stage,
-                    msg: dlState.stageMsg
-                });
-            }
+        if (dlState.running || (dlState.stage && dlState.stage !== "done" && dlState.stage !== "error")) {
+            send("download:stateSync", { ...dlState });
         }
     });
 }
@@ -107,23 +103,18 @@ ipcMain.handle("window:fullscreen", () => {
     if (mainWindow.isMaximized()) mainWindow.unmaximize();
     else mainWindow.maximize();
 });
-ipcMain.handle("open:page", (e, page) => {
-    mainWindow.loadFile(path.join(__dirname, "app", page));
-});
+ipcMain.handle("open:page", (e, page) =>
+    mainWindow.loadFile(path.join(__dirname, "app", page))
+);
 
 /* ============================================================
-   DOWNLOAD STATE - الـ renderer يطلبه عند فتح الصفحة
+   DOWNLOAD STATE
 ============================================================ */
 ipcMain.handle("download:getState", () => ({ ...dlState }));
 
 /* ============================================================
    FIVEM PATH
 ============================================================ */
-function isValidFiveMPath(p) {
-    try { return FIVEM_INDICATORS.some(f => fs.readdirSync(p).includes(f)); }
-    catch { return false; }
-}
-
 ipcMain.handle("path:validate", (e, p) => ({ valid: isValidFiveMPath(p) }));
 
 ipcMain.handle("path:select", async () => {
@@ -147,65 +138,51 @@ ipcMain.handle("path:get", () => {
             if (saved && fs.existsSync(saved)) return { success: true, path: saved };
         }
         const auto = detectFiveMPath();
-        if (auto) { fs.writeFileSync(FIVEM_PATH_FILE, auto, "utf8"); return { success: true, path: auto, auto: true }; }
+        if (auto) {
+            fs.writeFileSync(FIVEM_PATH_FILE, auto, "utf8");
+            return { success: true, path: auto, auto: true };
+        }
         return { success: false };
     } catch { return { success: false }; }
 });
 
 /* ============================================================
    HIDE / UNHIDE
-   ✅ الإخفاء القوي بـ +h +s على المجلد فقط
 ============================================================ */
-function attribHideFolder(folderPath) {
-    return new Promise(resolve => {
-        exec(`attrib +h +s "${folderPath}"`, () => resolve());
+const hide = (p) => new Promise(r => exec(`attrib +h +s "${p}"`, () => r()));
+const unhide = (p) => new Promise(r => exec(`attrib -h -s "${p}"`, () => r()));
+const unhideAll = (p) => new Promise(r => {
+    exec(`attrib -h -s "${p}"`, () => {
+        exec(`attrib -h -s "${p}\\*" /s /d`, () => r());
     });
-}
-
-function attribUnhideFolder(folderPath) {
-    return new Promise(resolve => {
-        exec(`attrib -h -s "${folderPath}"`, () => {
-            exec(`attrib -h -s "${folderPath}\\*" /s /d`, () => resolve());
-        });
-    });
-}
-
-function unhideItem(itemPath) {
-    return new Promise(resolve => exec(`attrib -h -s "${itemPath}"`, () => resolve()));
-}
+});
 
 /* ============================================================
-   DELETE FOLDER
+   FOLDER OPS
 ============================================================ */
 async function deleteFolder(folderPath) {
     try {
         if (!fs.existsSync(folderPath)) return;
-        await attribUnhideFolder(folderPath);
+        await unhideAll(folderPath);
         fs.rmSync(folderPath, { recursive: true, force: true });
     } catch {
         try { fs.rmSync(folderPath, { recursive: true, force: true }); } catch {}
     }
 }
 
-/* ============================================================
-   COPY DIR RECURSIVE
-============================================================ */
-function copyDirRecursive(src, dest) {
+function copyDir(src, dest) {
     if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
     for (const e of fs.readdirSync(src, { withFileTypes: true })) {
         const s = path.join(src, e.name), d = path.join(dest, e.name);
-        e.isDirectory() ? copyDirRecursive(s, d) : fs.copyFileSync(s, d);
+        e.isDirectory() ? copyDir(s, d) : fs.copyFileSync(s, d);
     }
 }
 
-/* ============================================================
-   FIND PACK FOLDER
-============================================================ */
-function findPackFolder(extractPath) {
-    if (GRAPHICS_FOLDERS.some(f => fs.existsSync(path.join(extractPath, f)))) return extractPath;
-    for (const item of fs.readdirSync(extractPath, { withFileTypes: true })) {
+function findPackFolder(root) {
+    if (GRAPHICS_FOLDERS.some(f => fs.existsSync(path.join(root, f)))) return root;
+    for (const item of fs.readdirSync(root, { withFileTypes: true })) {
         if (!item.isDirectory()) continue;
-        const sub = path.join(extractPath, item.name);
+        const sub = path.join(root, item.name);
         if (GRAPHICS_FOLDERS.some(f => fs.existsSync(path.join(sub, f)))) return sub;
         try {
             for (const deep of fs.readdirSync(sub, { withFileTypes: true })) {
@@ -215,13 +192,13 @@ function findPackFolder(extractPath) {
             }
         } catch {}
     }
-    return extractPath;
+    return root;
 }
 
 /* ============================================================
-   GOOGLE DRIVE HELPER
+   GOOGLE DRIVE
 ============================================================ */
-function resolveGDriveUrl(url) {
+function resolveGDrive(url) {
     const m1 = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (m1) return `https://drive.google.com/uc?export=download&confirm=t&id=${m1[1]}`;
     const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
@@ -229,15 +206,15 @@ function resolveGDriveUrl(url) {
     return url;
 }
 
-function httpsGet(url, headers = {}, maxRedirects = 10) {
+function httpsGet(url, headers = {}, maxR = 10) {
     return new Promise((resolve, reject) => {
         const u = new URL(url);
-        const req = https.request({
+        https.request({
             hostname: u.hostname, path: u.pathname + u.search, method: "GET",
             headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", ...headers }
         }, res => {
             if ([301, 302, 303, 307].includes(res.statusCode) && res.headers.location) {
-                if (maxRedirects <= 0) return reject(new Error("Too many redirects"));
+                if (maxR <= 0) return reject(new Error("Too many redirects"));
                 let loc = res.headers.location;
                 if (loc.startsWith("/")) loc = `https://${u.hostname}${loc}`;
                 const cookies = res.headers["set-cookie"]?.map(c => c.split(";")[0]).join("; ") || "";
@@ -246,27 +223,23 @@ function httpsGet(url, headers = {}, maxRedirects = 10) {
                     const lu = new URL(loc.startsWith("http") ? loc : `https://drive.google.com${loc}`);
                     if (!lu.searchParams.get("confirm")) { lu.searchParams.set("confirm", "t"); loc = lu.toString(); }
                 } catch {}
-                return httpsGet(loc, newH, maxRedirects - 1).then(resolve).catch(reject);
+                return httpsGet(loc, newH, maxR - 1).then(resolve).catch(reject);
             }
             resolve(res);
-        });
-        req.on("error", reject);
-        req.end();
+        }).on("error", reject).end();
     });
 }
 
 /* ============================================================
    DOWNLOAD:START
-   ✅ التحميل يعمل في main process
-   ✅ did-finish-load يعيد إرسال الحالة لأي صفحة تُفتح
 ============================================================ */
-ipcMain.handle("download:start", async (e, { url, product }) => {
+ipcMain.handle("download:start", async (e, { url, product, name }) => {
     if (dlState.running) return { success: false, message: "Download already in progress" };
 
     return new Promise(async (resolve) => {
         try {
             const zipPath = path.join(app.getPath("temp"), `${product}_${Date.now()}.zip`);
-            const response = await httpsGet(resolveGDriveUrl(url));
+            const response = await httpsGet(resolveGDrive(url));
 
             if ((response.headers["content-type"] || "").includes("text/html")) {
                 resolve({ success: false });
@@ -283,6 +256,7 @@ ipcMain.handle("download:start", async (e, { url, product }) => {
             dlState.zipPath  = zipPath;
             dlState.stage    = "downloading";
             dlState.stageMsg = "جاري التحميل...";
+            dlState.name     = name || product;
 
             const file = fs.createWriteStream(zipPath);
 
@@ -292,16 +266,14 @@ ipcMain.handle("download:start", async (e, { url, product }) => {
                 const speed   = (chunk.length / 1024 / 1024).toFixed(2);
                 dlState.percent = percent;
                 dlState.speed   = speed;
-                sendToRenderer("download:progress", { percent, speed });
+                send("download:progress", { percent, speed });
             });
 
             response.pipe(file);
 
             file.on("finish", () => {
                 file.close();
-                dlState.stage    = "installing";
-                dlState.stageMsg = "جاري التثبيت...";
-                sendToRenderer("download:done", { product, zipPath });
+                send("download:done", { product, zipPath });
                 resolve({ success: true, zipPath });
             });
 
@@ -320,37 +292,6 @@ ipcMain.handle("download:start", async (e, { url, product }) => {
 });
 
 /* ============================================================
-   DOWNLOAD LAUNCHERS
-============================================================ */
-ipcMain.handle("download:launchers", async () => {
-    const desktop = app.getPath("desktop");
-    for (let i = 0; i < LAUNCHERS.length; i++) {
-        const { url, fileName } = LAUNCHERS[i];
-        try {
-            const res   = await httpsGet(url);
-            const total = parseInt(res.headers["content-length"] || "0");
-            let dl = 0;
-            sendToRenderer("install:status", { stage: "copying", msg: `جاري تحميل ${fileName}...` });
-            await new Promise((resolve, reject) => {
-                const file = fs.createWriteStream(path.join(desktop, fileName));
-                res.on("data", chunk => {
-                    dl += chunk.length;
-                    const pct = total > 0 ? Math.floor((dl / total) * 100) : 0;
-                    sendToRenderer("download:progress", { percent: i * 50 + Math.floor(pct / 2), speed: (chunk.length / 1024 / 1024).toFixed(2) });
-                });
-                res.pipe(file);
-                file.on("finish", () => { file.close(); resolve(); });
-                file.on("error", reject);
-            });
-        } catch (err) { console.error(`Launcher error (${fileName}):`, err.message); }
-    }
-    sendToRenderer("download:progress", { percent: 100, speed: "0" });
-    sendToRenderer("install:status", { stage: "done", msg: "✅ تم تحميل الـ Launchers على سطح المكتب" });
-    sendToRenderer("download:done", { product: "launchers", zipPath: "" });
-    return { success: true };
-});
-
-/* ============================================================
    INSTALL:RUN
 ============================================================ */
 ipcMain.handle("install:run", async (e, { zipPath, product }) => {
@@ -359,19 +300,21 @@ ipcMain.handle("install:run", async (e, { zipPath, product }) => {
         const fivemPath = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
         if (!isValidFiveMPath(fivemPath)) return { success: false };
 
-        const send = (stage, msg) => {
+        const setStage = (stage, msg) => {
             dlState.stage    = stage;
             dlState.stageMsg = msg;
-            sendToRenderer("install:status", { stage, msg });
+            send("install:status", { stage, msg });
         };
 
-        send("preparing", "جاري التحضير...");
+        // 1. إزالة الإخفاء
+        setStage("preparing", "جاري التحضير...");
         for (const folder of GRAPHICS_FOLDERS) {
             const dest = path.join(fivemPath, folder);
-            if (fs.existsSync(dest)) await attribUnhideFolder(dest);
+            if (fs.existsSync(dest)) await unhideAll(dest);
         }
 
-        send("extracting", "جاري فك الضغط...");
+        // 2. فك الضغط
+        setStage("extracting", "جاري فك الضغط...");
         const tempExtract = path.join(app.getPath("temp"), `ca_extract_${Date.now()}`);
         fs.mkdirSync(tempExtract, { recursive: true });
 
@@ -388,27 +331,28 @@ ipcMain.handle("install:run", async (e, { zipPath, product }) => {
 
         const packFolder = findPackFolder(tempExtract);
 
-        send("copying", "جاري نسخ الملفات...");
+        // 3. نسخ
+        setStage("copying", "جاري نسخ الملفات...");
         let copiedAny = false;
         for (const folder of GRAPHICS_FOLDERS) {
             const src  = path.join(packFolder, folder);
             const dest = path.join(fivemPath, folder);
-            if (fs.existsSync(src)) { copyDirRecursive(src, dest); copiedAny = true; }
+            if (fs.existsSync(src)) { copyDir(src, dest); copiedAny = true; }
         }
 
         try { fs.unlinkSync(zipPath); } catch {}
         try { fs.rmSync(tempExtract, { recursive: true, force: true }); } catch {}
         if (!copiedAny) return { success: false };
 
-        // ✅ إخفاء قوي +h +s على المجلد فقط
-        send("hiding", "جاري حماية الملفات...");
+        // 4. إخفاء
+        setStage("hiding", "جاري حماية الملفات...");
         for (const folder of GRAPHICS_FOLDERS) {
             const dest = path.join(fivemPath, folder);
-            if (fs.existsSync(dest)) await attribHideFolder(dest);
+            if (fs.existsSync(dest)) await hide(dest);
         }
 
         dlState.running = false;
-        send("done", "تم التثبيت بنجاح ✅");
+        setStage("done", "تم التثبيت بنجاح ✅");
         return { success: true };
 
     } catch (err) {
@@ -427,9 +371,41 @@ ipcMain.handle("graphics:delete", async () => {
     try {
         if (!fs.existsSync(FIVEM_PATH_FILE)) return { success: false };
         const fivemPath = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
-        for (const folder of GRAPHICS_FOLDERS) await deleteFolder(path.join(fivemPath, folder));
+        for (const folder of GRAPHICS_FOLDERS)
+            await deleteFolder(path.join(fivemPath, folder));
         return { success: true };
     } catch { return { success: false }; }
+});
+
+/* ============================================================
+   DOWNLOAD LAUNCHERS
+============================================================ */
+ipcMain.handle("download:launchers", async () => {
+    const desktop = app.getPath("desktop");
+    for (let i = 0; i < LAUNCHERS.length; i++) {
+        const { url, fileName } = LAUNCHERS[i];
+        try {
+            const res   = await httpsGet(url);
+            const total = parseInt(res.headers["content-length"] || "0");
+            let dl = 0;
+            send("install:status", { stage: "copying", msg: `جاري تحميل ${fileName}...` });
+            await new Promise((resolve, reject) => {
+                const file = fs.createWriteStream(path.join(desktop, fileName));
+                res.on("data", chunk => {
+                    dl += chunk.length;
+                    const pct = total > 0 ? Math.floor((dl / total) * 100) : 0;
+                    send("download:progress", { percent: i * 50 + Math.floor(pct / 2), speed: (chunk.length / 1024 / 1024).toFixed(2) });
+                });
+                res.pipe(file);
+                file.on("finish", () => { file.close(); resolve(); });
+                file.on("error", reject);
+            });
+        } catch (err) { console.error(`Launcher error (${fileName}):`, err.message); }
+    }
+    send("download:progress", { percent: 100, speed: "0" });
+    send("install:status", { stage: "done", msg: "✅ تم تحميل الـ Launchers على سطح المكتب" });
+    send("download:done", { product: "launchers", zipPath: "" });
+    return { success: true };
 });
 
 /* ============================================================
@@ -442,7 +418,7 @@ ipcMain.handle("reshade:enable", async () => {
         const iniPath   = path.join(fivemPath, "CitizenFX.ini");
         if (!fs.existsSync(iniPath)) return { success: false, message: "ملف CitizenFX.ini غير موجود" };
 
-        await unhideItem(iniPath);
+        await unhide(iniPath);
         let content = fs.readFileSync(iniPath, "utf8");
         if (content.includes("ReShade5=ID:"))
             return { success: false, alreadyEnabled: true, message: "ReShade مفعّل مسبقاً" };
@@ -502,11 +478,34 @@ ipcMain.handle("mods:download", async (e, { url, fileName }) => {
         const fivemPath  = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
         const modsFolder = path.join(fivemPath, "mods");
         if (!fs.existsSync(modsFolder)) fs.mkdirSync(modsFolder, { recursive: true });
-        const response = await httpsGet(resolveGDriveUrl(url));
+        
+        dlState.stage = "copying";
+        dlState.stageMsg = "جاري نسخ الملفات...";
+        send("install:status", { stage: "copying", msg: "جاري نسخ الملفات..." });
+        
+        const response = await httpsGet(resolveGDrive(url));
+        const total = parseInt(response.headers["content-length"] || "0");
+        let downloaded = 0;
+        
         return new Promise(resolve => {
             const file = fs.createWriteStream(path.join(modsFolder, fileName));
+            
+            response.on("data", chunk => {
+                downloaded += chunk.length;
+                const percent = total > 0 ? Math.floor((downloaded / total) * 100) : 0;
+                const speed = (chunk.length / 1024 / 1024).toFixed(2);
+                dlState.percent = percent;
+                dlState.speed = speed;
+                send("download:progress", { percent, speed });
+            });
+            
             response.pipe(file);
-            file.on("finish", () => { file.close(); resolve({ success: true }); });
+            file.on("finish", () => { 
+                file.close(); 
+                dlState.percent = 100;
+                send("download:progress", { percent: 100, speed: "0" });
+                resolve({ success: true }); 
+            });
             file.on("error", () => resolve({ success: false }));
         });
     } catch { return { success: false }; }
@@ -559,7 +558,132 @@ ipcMain.handle("auth:logout", () => {
 });
 
 /* ============================================================
+   PERFORMANCE
+============================================================ */
+ipcMain.handle("performance:clearTemp", async () => {
+    try {
+        const tempPath = app.getPath("temp");
+        let filesDeleted = 0;
+        
+        if (fs.existsSync(tempPath)) {
+            const files = fs.readdirSync(tempPath);
+            for (const file of files) {
+                try {
+                    const filePath = path.join(tempPath, file);
+                    const stat = fs.statSync(filePath);
+                    if (stat.isDirectory()) {
+                        fs.rmSync(filePath, { recursive: true, force: true });
+                    } else {
+                        fs.unlinkSync(filePath);
+                    }
+                    filesDeleted++;
+                } catch {}
+            }
+        }
+        
+        return { success: true, filesDeleted };
+    } catch { return { success: false }; }
+});
+
+ipcMain.handle("performance:clearCache", async () => {
+    try {
+        if (!fs.existsSync(FIVEM_PATH_FILE)) return { success: false };
+        const fivemPath = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
+        
+        const cachePaths = [
+            path.join(fivemPath, "cache"),
+            path.join(fivemPath, "cache2"),
+            path.join(fivemPath, "server-cache"),
+            path.join(fivemPath, "server-cache-priv")
+        ];
+        
+        for (const cachePath of cachePaths) {
+            if (fs.existsSync(cachePath)) {
+                await unhideAll(cachePath);
+                fs.rmSync(cachePath, { recursive: true, force: true });
+            }
+        }
+        
+        return { success: true };
+    } catch { return { success: false }; }
+});
+
+ipcMain.handle("performance:clearLogs", async () => {
+    try {
+        if (!fs.existsSync(FIVEM_PATH_FILE)) return { success: false };
+        const fivemPath = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
+        
+        const logPaths = [
+            path.join(fivemPath, "logs"),
+            path.join(fivemPath, "crashes"),
+            path.join(fivemPath, "data", "cache-priv")
+        ];
+        
+        let filesDeleted = 0;
+        for (const logPath of logPaths) {
+            if (fs.existsSync(logPath)) {
+                await unhideAll(logPath);
+                const files = fs.readdirSync(logPath);
+                for (const file of files) {
+                    try {
+                        const filePath = path.join(logPath, file);
+                        const stat = fs.statSync(filePath);
+                        if (stat.isDirectory()) {
+                            fs.rmSync(filePath, { recursive: true, force: true });
+                        } else {
+                            fs.unlinkSync(filePath);
+                        }
+                        filesDeleted++;
+                    } catch {}
+                }
+            }
+        }
+        
+        return { success: true, filesDeleted };
+    } catch { return { success: false }; }
+});
+
+ipcMain.handle("performance:getSystemInfo", async () => {
+    try {
+        const os = require("os");
+        
+        // Disk space
+        const diskSpace = {
+            free: 0,
+            total: 0
+        };
+        
+        try {
+            const stats = fs.statSync(app.getPath("home"));
+            // Use os module for disk info on Windows
+            if (process.platform === "win32") {
+                const { execSync } = require("child_process");
+                const drive = app.getPath("home").split(":")[0] + ":";
+                const output = execSync(`wmic logicaldisk where "DeviceID='${drive}'" get FreeSpace,Size`).toString();
+                const lines = output.split("\n").filter(l => l.trim());
+                if (lines.length > 1) {
+                    const values = lines[1].trim().split(/\s+/);
+                    if (values.length >= 2) {
+                        diskSpace.free = parseInt(values[0]) || 0;
+                        diskSpace.total = parseInt(values[1]) || 0;
+                    }
+                }
+            }
+        } catch {}
+        
+        // FiveM status
+        let fivemStatus = { installed: false };
+        if (fs.existsSync(FIVEM_PATH_FILE)) {
+            const fivemPath = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
+            fivemStatus.installed = isValidFiveMPath(fivemPath);
+        }
+        
+        return { success: true, diskSpace, fivemStatus };
+    } catch { return { success: false }; }
+});
+
+/* ============================================================
    AUTO UPDATER
 ============================================================ */
-autoUpdater.on("update-available",  () => sendToRenderer("update:status", "update-available"));
-autoUpdater.on("update-downloaded", () => { sendToRenderer("update:status", "update-downloaded"); autoUpdater.quitAndInstall(); });
+autoUpdater.on("update-available",  () => send("update:status", "update-available"));
+autoUpdater.on("update-downloaded", () => { send("update:status", "update-downloaded"); autoUpdater.quitAndInstall(); });
