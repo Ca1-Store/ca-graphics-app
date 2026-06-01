@@ -225,6 +225,21 @@
             box-shadow: 0 12px 30px rgba(255,77,106,0.3);
         }
 
+        .perf-btn.restore {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: #fff;
+            box-shadow: 0 8px 25px rgba(107, 114, 128, 0.2);
+        }
+
+        .perf-btn.restore:hover {
+            box-shadow: 0 12px 30px rgba(107, 114, 128, 0.3);
+        }
+
+        .opt-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -242,6 +257,120 @@
             background: rgba(255,179,71,0.1);
             color: #ffb347;
             border-color: rgba(255,179,71,0.2);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: rgba(15, 18, 27, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 32px;
+            max-width: 500px;
+            width: 90%;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 16px;
+        }
+
+        .modal-description {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            line-height: 1.7;
+            margin-bottom: 20px;
+        }
+
+        .modal-details {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+
+        .modal-details-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #7dffd2;
+            margin-bottom: 12px;
+        }
+
+        .modal-details-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .modal-details-list li {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 13px;
+            line-height: 1.8;
+            padding: 4px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .modal-details-list li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #7dffd2;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            height: 44px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transition: .2s ease;
+        }
+
+        .modal-btn.confirm {
+            background: linear-gradient(135deg, #00ffae, #00d4a8);
+            color: #081016;
+            box-shadow: 0 8px 25px rgba(0, 255, 174, 0.2);
+        }
+
+        .modal-btn.confirm:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(0, 255, 174, 0.3);
+        }
+
+        .modal-btn.cancel {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-btn.cancel:hover {
+            background: rgba(255, 255, 255, 0.08);
         }
     </style>
 </head>
@@ -373,7 +502,7 @@
                                     <div class="opt-desc">حذف ملفات temp المؤقتة</div>
                                 </div>
                             </div>
-                            <button class="perf-btn" onclick="clearTempFiles()">Clean</button>
+                            <button class="perf-btn" onclick="confirmClearTempFiles()">Clean</button>
                         </div>
 
                         <div class="opt-item">
@@ -390,7 +519,7 @@
                                     <div class="opt-desc">حذف كاش FiveM</div>
                                 </div>
                             </div>
-                            <button class="perf-btn" onclick="clearCache()">Clean</button>
+                            <button class="perf-btn" onclick="confirmClearCache()">Clean</button>
                         </div>
 
                         <div class="opt-item">
@@ -407,7 +536,7 @@
                                     <div class="opt-desc">حذف ملفات السجلات</div>
                                 </div>
                             </div>
-                            <button class="perf-btn danger" onclick="clearLogs()">Clean</button>
+                            <button class="perf-btn danger" onclick="confirmClearLogs()">Clean</button>
                         </div>
                     </div>
 
@@ -457,12 +586,221 @@
                             <div class="status-badge" id="fivemBadge">—</div>
                         </div>
                     </div>
+
+                    <div class="glass-card">
+                        <div class="card-top">
+                            <div>
+                                <div class="card-title">GPU Optimizations</div>
+                                <div class="card-subtitle">تحسينات كارت الشاشة</div>
+                            </div>
+                            <div class="card-icon">
+                                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                                    <line x1="12" y1="2" x2="12" y2="12"></line>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">NVIDIA Optimize</div>
+                                    <div class="opt-desc">تحسين إعدادات NVIDIA للحد الأقصى</div>
+                                </div>
+                            </div>
+                            <div class="opt-buttons">
+                                <button class="perf-btn" onclick="confirmOptimizeNvidia()">Apply</button>
+                                <button class="perf-btn restore" onclick="restoreNvidia()">Restore</button>
+                            </div>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">Game Mode</div>
+                                    <div class="opt-desc">تفعيل Game Mode و High Performance</div>
+                                </div>
+                            </div>
+                            <div class="opt-buttons">
+                                <button class="perf-btn" onclick="confirmEnableGameMode()">Apply</button>
+                                <button class="perf-btn restore" onclick="restoreGameMode()">Restore</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card">
+                        <div class="card-top">
+                            <div>
+                                <div class="card-title">FiveM Graphics</div>
+                                <div class="card-subtitle">تحسينات رسوميات FiveM</div>
+                            </div>
+                            <div class="card-icon">
+                                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polygon points="10 8 16 12 10 16 10 8"></polygon>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">Optimize Graphics</div>
+                                    <div class="opt-desc">تقليل الإعدادات لزيادة FPS</div>
+                                </div>
+                            </div>
+                            <div class="opt-buttons">
+                                <button class="perf-btn" onclick="confirmOptimizeFiveMGraphics()">Apply</button>
+                                <button class="perf-btn restore" onclick="restoreFiveMGraphics()">Restore</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card">
+                        <div class="card-top">
+                            <div>
+                                <div class="card-title">System Optimizations</div>
+                                <div class="card-subtitle">تحسينات النظام</div>
+                            </div>
+                            <div class="card-icon">
+                                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">Optimize Services</div>
+                                    <div class="opt-desc">إيقاف الخدمات غير الضرورية</div>
+                                </div>
+                            </div>
+                            <div class="opt-buttons">
+                                <button class="perf-btn" onclick="confirmOptimizeServices()">Apply</button>
+                                <button class="perf-btn restore" onclick="restoreServices()">Restore</button>
+                            </div>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M2 12h20"></path>
+                                        <path d="M2 12l5-5"></path>
+                                        <path d="M2 12l5 5"></path>
+                                        <path d="M22 12l-5-5"></path>
+                                        <path d="M22 12l-5 5"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">Optimize Network</div>
+                                    <div class="opt-desc">تحسين الشبكة لتقليل الـ Lag</div>
+                                </div>
+                            </div>
+                            <div class="opt-buttons">
+                                <button class="perf-btn" onclick="confirmOptimizeNetwork()">Apply</button>
+                                <button class="perf-btn restore" onclick="restoreNetwork()">Restore</button>
+                            </div>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M2 12h20"></path>
+                                        <path d="M12 2v20"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">Optimize RAM</div>
+                                    <div class="opt-desc">تحسين الذاكرة العشوائية</div>
+                                </div>
+                            </div>
+                            <div class="opt-buttons">
+                                <button class="perf-btn" onclick="confirmOptimizeRAM()">Apply</button>
+                                <button class="perf-btn restore" onclick="restoreRAM()">Restore</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card" style="background: linear-gradient(135deg, rgba(0,255,174,0.15), rgba(79,140,255,0.1)); border-color: rgba(0,255,174,0.3);">
+                        <div class="card-top">
+                            <div>
+                                <div class="card-title">Full Optimization</div>
+                                <div class="card-subtitle">تحسين شامل (جميع الميزات)</div>
+                            </div>
+                            <div class="card-icon">
+                                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <div class="opt-item">
+                            <div class="opt-left">
+                                <div class="opt-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="opt-name">Apply All Optimizations</div>
+                                    <div class="opt-desc">تطبيق جميع التحسينات دفعة واحدة</div>
+                                </div>
+                            </div>
+                            <div class="opt-buttons">
+                                <button class="perf-btn" onclick="confirmFullOptimization()">Apply All</button>
+                                <button class="perf-btn restore" onclick="restoreAll()">Restore All</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
     <div id="notify" class="notification"></div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal">
+            <div class="modal-title" id="modalTitle">تأكيد الإجراء</div>
+            <div class="modal-description" id="modalDescription">هل أنت متأكد من تنفيذ هذا الإجراء؟</div>
+            <div class="modal-details">
+                <div class="modal-details-title">ماذا سيحدث:</div>
+                <ul class="modal-details-list" id="modalDetails">
+                    <li>تفاصيل الإجراء...</li>
+                </ul>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closeModal()">إلغاء</button>
+                <button class="modal-btn confirm" id="modalConfirmBtn">تأكيد</button>
+            </div>
+        </div>
+    </div>
 
     <script src="performance.js"></script>
     <script>

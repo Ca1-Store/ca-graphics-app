@@ -2,22 +2,22 @@ const packs = [
     {
         id: "CA1", plan: "CA-1", name: "CA - Pack 1", level: 1,
         images: ["../assets/Ca--Pack.png","../assets/Ca-1.png","../assets/Ca-1v1.png"],
-        url: "https://drive.google.com/uc?export=download&id=1epUBOTeQmiwEos5bW6eN1Eim-DEeGtbu"
+        url: "http://213.199.63.97/CA-1%20PACK.zip"
     },
     {
         id: "CA2", plan: "CA-2", name: "CA - Pack 2", level: 2,
         images: ["../assets/Ca-Pack.png","../assets/Ca-2v2.png","../assets/Ca_Store.png"],
-        url: "https://drive.google.com/uc?export=download&id=1ElRtHGpzdphMV5bznc0W2Fy8_2vxEHoN"
+        url: "http://213.199.63.97/CA-2%20PACK.zip"
     },
     {
         id: "CA3", plan: "CA-3", name: "CA - Pack 3", level: 3,
         images: ["../assets/ca333.png","../assets/ca3.png","../assets/ca33.png"],
-        url: "https://drive.google.com/uc?export=download&id=1p3tCjRyTLGkbXBnlolUsnbEt7jBsZjTm"
+        url: "http://213.199.63.97/CA-3%20PACK.zip"
     }
        , {
         id: "CA4", plan: "CA-4", name: "CA - Pack 4", level: 4,
         images: ["../assets/ca444.png","../assets/ca4.png","../assets/ca44.png"],
-        url: "https://drive.google.com/uc?export=download&id=1UsYRgYfvJLkHMxUvbP_qzmyQd_GT1cEb"
+        url: "http://213.199.63.97/CA-4%20PACK.zip"
     }
 
 ];
@@ -206,11 +206,11 @@ document.getElementById("launchersBtn").onclick = async () => {
     const launchers = [
         {
             name: "CA - L1.exe",
-            url: "https://drive.google.com/uc?export=download&id=1-WnvUNCVATIOcp8tjiBw5DHssMx_85Ax"
+            url: "http://213.199.63.97/CA%20-%20L1.exe"
         },
         {
             name: "CA - L2.exe",
-            url: "https://drive.google.com/uc?export=download&id=1wmpQhGxRN8y6s5kDPFfKO-Vb32p8AbYS"
+            url: "http://213.199.63.97/CA%20-%20L2.exe"
         }
     ];
 
