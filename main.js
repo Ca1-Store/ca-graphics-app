@@ -836,7 +836,31 @@ ipcMain.handle("reshade:enable", async () => {
 
 
 
-        const line = `ReShade5=ID:9943938c acknowledged that ReShade 5.x has a bug that will lead to game crashes`;
+        // البحث عن ID الصحيح في ملفات log
+        const logsPath = path.join(fivemPath, "logs");
+        let reshadeID = null;
+
+        if (fs.existsSync(logsPath)) {
+            const logFiles = fs.readdirSync(logsPath).filter(f => f.endsWith(".log"));
+            
+            for (const logFile of logFiles) {
+                try {
+                    const logContent = fs.readFileSync(path.join(logsPath, logFile), "utf8");
+                    const match = logContent.match(/ReShade5=ID:([a-f0-9]+)/i);
+                    if (match) {
+                        reshadeID = match[1];
+                        break;
+                    }
+                } catch {}
+            }
+        }
+
+        // إذا لم يتم العثور على ID في logs، استخدم الافتراضي
+        if (!reshadeID) {
+            reshadeID = "9943938c";
+        }
+
+        const line = `ReShade5=ID:${reshadeID} acknowledged that ReShade 5.x has a bug that will lead to game crashes`;
 
         content = content.includes("[Addons]")
 
