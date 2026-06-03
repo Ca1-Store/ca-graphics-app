@@ -1087,7 +1087,7 @@ ipcMain.handle("auth:login", async () => {
 
             if (result.success) fs.writeFileSync(SESSION_PATH, JSON.stringify({
 
-                token: result.token, plans: result.plans, username: result.username
+                token: result.token, plans: result.plans, username: result.username, discordId: result.discordId
 
             }));
 
@@ -1119,7 +1119,10 @@ ipcMain.handle("auth:check", async () => {
 
         }).then(r => r.json());
 
-        if (result.success) result.username = session.username;
+        if (result.success) {
+            result.username = session.username;
+            result.discordId = session.discordId;
+        }
 
         return result;
 
@@ -2217,10 +2220,212 @@ ipcMain.handle("performance:restoreAll", async () => {
 
 /* ============================================================
 
+   RATINGS & COMMENTS
+
+============================================================ */
+
+const RATINGS_PATH = path.join(app.getPath("userData"), "ratings.json");
+
+// Admin Discord IDs who can delete ratings
+const ADMIN_DISCORD_IDS = ["1336347875206234292"];
+
+function isAdmin(discordId) {
+    return ADMIN_DISCORD_IDS.includes(discordId);
+}
+
+function loadRatings() {
+    try {
+        if (fs.existsSync(RATINGS_PATH)) {
+            return JSON.parse(fs.readFileSync(RATINGS_PATH, "utf8"));
+        }
+    } catch {}
+    return {};
+}
+
+function saveRatings(ratings) {
+    try {
+        fs.writeFileSync(RATINGS_PATH, JSON.stringify(ratings, null, 2), "utf8");
+        return true;
+    } catch {}
+    return false;
+}
+
+ipcMain.handle("ratings:get", () => {
+    return { success: true, ratings: loadRatings() };
+});
+
+ipcMain.handle("ratings:submit", async (e, { packId, rating, comment, username }) => {
+    try {
+        const ratings = loadRatings();
+
+        if (!ratings[packId]) {
+            ratings[packId] = { ratings: [], comments: [], averageRating: 0, totalRatings: 0 };
+        }
+
+        const packData = ratings[packId];
+
+        // Add rating
+        packData.ratings.push({
+            rating,
+            username: username || "Anonymous",
+            timestamp: Date.now()
+        });
+
+        // Add comment if provided (with rating included)
+        if (comment && comment.trim()) {
+            packData.comments.push({
+                comment: comment.trim(),
+                rating: rating,
+                username: username || "Anonymous",
+                timestamp: Date.now()
+            });
+        }
+
+        // Calculate average
+        const sum = packData.ratings.reduce((acc, r) => acc + r.rating, 0);
+        packData.averageRating = (sum / packData.ratings.length).toFixed(1);
+        packData.totalRatings = packData.ratings.length;
+
+        saveRatings(ratings);
+
+        return { success: true, averageRating: packData.averageRating, totalRatings: packData.totalRatings };
+    } catch (err) {
+        console.error("Rating error:", err);
+        return { success: false, message: "Failed to save rating" };
+    }
+});
+
+ipcMain.handle("ratings:getPack", (e, packId) => {
+    try {
+        const ratings = loadRatings();
+        const packData = ratings[packId] || { ratings: [], comments: [], averageRating: 0, totalRatings: 0 };
+        return { success: true, ...packData };
+    } catch {
+        return { success: false };
+    }
+});
+
+ipcMain.handle("ratings:deleteComment", async (e, { packId, commentIndex, username }) => {
+    try {
+        // Check if user is admin
+        if (!isAdmin(username)) {
+            return { success: false, message: "Unauthorized: Only admins can delete comments" };
+        }
+
+        const ratings = loadRatings();
+        if (!ratings[packId] || !ratings[packId].comments) {
+            return { success: false, message: "Comment not found" };
+        }
+
+        const packData = ratings[packId];
+        const comment = packData.comments[commentIndex];
+
+        if (!comment) {
+            return { success: false, message: "Comment not found" };
+        }
+
+        // Remove comment
+        packData.comments.splice(commentIndex, 1);
+
+        // Recalculate average rating
+        if (packData.ratings.length > 0) {
+            const sum = packData.ratings.reduce((acc, r) => acc + r.rating, 0);
+            packData.averageRating = (sum / packData.ratings.length).toFixed(1);
+        } else {
+            packData.averageRating = 0;
+        }
+
+        saveRatings(ratings);
+        return { success: true, message: "Comment deleted successfully" };
+    } catch (err) {
+        console.error("Delete comment error:", err);
+        return { success: false, message: "Failed to delete comment" };
+    }
+});
+
+ipcMain.handle("ratings:deleteRating", async (e, { packId, ratingIndex, username }) => {
+    try {
+        // Check if user is admin
+        if (!isAdmin(username)) {
+            return { success: false, message: "Unauthorized: Only admins can delete ratings" };
+        }
+
+        const ratings = loadRatings();
+        if (!ratings[packId] || !ratings[packId].ratings) {
+            return { success: false, message: "Rating not found" };
+        }
+
+        const packData = ratings[packId];
+        const rating = packData.ratings[ratingIndex];
+
+        if (!rating) {
+            return { success: false, message: "Rating not found" };
+        }
+
+        // Remove rating
+        packData.ratings.splice(ratingIndex, 1);
+
+        // Recalculate average rating
+        if (packData.ratings.length > 0) {
+            const sum = packData.ratings.reduce((acc, r) => acc + r.rating, 0);
+            packData.averageRating = (sum / packData.ratings.length).toFixed(1);
+        } else {
+            packData.averageRating = 0;
+        }
+
+        packData.totalRatings = packData.ratings.length;
+
+        saveRatings(ratings);
+        return { success: true, message: "Rating deleted successfully" };
+    } catch (err) {
+        console.error("Delete rating error:", err);
+        return { success: false, message: "Failed to delete rating" };
+    }
+});
+
+
+
+/* ============================================================
+
    AUTO UPDATER
 
 ============================================================ */
 
-autoUpdater.on("update-available",  () => send("update:status", "update-available"));
+// إعداد autoUpdater
+autoUpdater.setFeedURL({
+    provider: "github",
+    owner: "Ca1-Store",
+    repo: "ca-graphics-app"
+});
 
-autoUpdater.on("update-downloaded", () => { send("update:status", "update-downloaded"); autoUpdater.quitAndInstall(); });
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on("update-available", (info) => {
+    console.log("Update available:", info.version);
+    send("update:status", "update-available");
+});
+
+autoUpdater.on("update-not-available", (info) => {
+    console.log("No update available:", info.version);
+});
+
+autoUpdater.on("update-downloaded", (info) => {
+    console.log("Update downloaded:", info.version);
+    send("update:status", "update-downloaded");
+    // لا تقم بتثبيت التحديث تلقائياً، دع المستخدم يقرر
+    // autoUpdater.quitAndInstall();
+});
+
+autoUpdater.on("error", (err) => {
+    console.error("Update error:", err);
+    send("update:status", "update-error");
+});
+
+// فحص التحديث عند بدء التشغيل
+app.whenReady().then(() => {
+    // تأخير بسيط للتأكد من أن التطبيق جاهز
+    setTimeout(() => {
+        autoUpdater.checkForUpdates();
+    }, 5000);
+});

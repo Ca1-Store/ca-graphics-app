@@ -1,40 +1,46 @@
-const packs = [
-    {
-        id: "CA1", plan: "CA-1", name: "CA - Pack 1", level: 1,
-        images: ["../assets/Ca--Pack.png","../assets/Ca-1.png","../assets/Ca-1v1.png"],
-        url: "http://213.199.63.97/CA-1%20PACK.zip"
-    },
-    {
-        id: "CA2", plan: "CA-2", name: "CA - Pack 2", level: 2,
-        images: ["../assets/Ca-Pack.png","../assets/Ca-2v2.png","../assets/Ca_Store.png"],
-        url: "http://213.199.63.97/CA-2%20PACK.zip"
-    },
-    {
-        id: "CA3", plan: "CA-3", name: "CA - Pack 3", level: 3,
-        images: ["../assets/ca333.png","../assets/ca3.png","../assets/ca33.png"],
-        url: "http://213.199.63.97/CA-3%20PACK.zip"
-    }
-       , {
-        id: "CA4", plan: "CA-4", name: "CA - Pack 4", level: 4,
-        images: ["../assets/ca444.png","../assets/ca4.png","../assets/ca44.png"],
-        url: "http://213.199.63.97/CA-4%20PACK.zip"
-    }
-
-];
+let packs = [];
 
 const packsContainer = document.getElementById("packsContainer");
 const notify         = document.getElementById("notify");
 
 let selectedPack = null;
 let userPlans    = [];
+let packRatings  = {};
 const imageTimers  = {};
 const imageIndexes = {};
+let currentRating = 0;
+let currentUser = null;
+let currentDiscordId = null;
+const ADMIN_DISCORD_ID = "1336347875206234292";
+const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
+
+function isAdmin() {
+    return currentDiscordId === ADMIN_DISCORD_ID;
+}
+
+/* ── FETCH PACKS FROM SERVER ── */
+async function fetchPacksFromServer() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/packs`);
+        const data = await res.json();
+        if (data.success) {
+            packs = data.packs;
+            return true;
+        }
+        return false;
+    } catch (err) {
+        console.error("Failed to fetch packs:", err);
+        return false;
+    }
+}
 
 /* ── AUTH ── */
 async function checkAuth() {
     const r = await window.api.auth.check();
     if (!r.success) { window.api.openPage("login.html"); return false; }
     userPlans = r.plans || [];
+    currentUser = r.username || null;
+    currentDiscordId = r.discordId || null;
     return true;
 }
 
@@ -43,6 +49,138 @@ function showNotify(msg, type = "success") {
     notify.textContent = msg;
     notify.className = `notification show ${type}`;
     setTimeout(() => notify.classList.remove("show"), 3500);
+}
+
+/* ── RATINGS ── */
+async function loadRatings() {
+    const r = await window.api.ratings.get();
+    if (r.success) {
+        packRatings = r.ratings;
+    }
+}
+
+function getPackRating(packId) {
+    const data = packRatings[packId];
+    if (!data || data.totalRatings === 0) {
+        return { average: 0, count: 0 };
+    }
+    return { average: parseFloat(data.averageRating), count: data.totalRatings };
+}
+
+function renderStars(rating) {
+    const fullStars = Math.floor(rating);
+    const hasHalf = rating % 1 >= 0.5;
+    let stars = '';
+    
+    for (let i = 0; i < 5; i++) {
+        if (i < fullStars) {
+            stars += `<svg class="rating-star" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`;
+        } else {
+            stars += `<svg class="rating-star empty" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`;
+        }
+    }
+    return stars;
+}
+
+function openRatingPopup(packId) {
+    selectedPack = packs.find(p => p.id === packId);
+    if (!selectedPack) return;
+
+    const preview = document.getElementById("ratingPackPreview");
+    if (preview) {
+        preview.innerHTML = `
+            <img class="manage-pack-img" src="${selectedPack.images[0]}" />
+            <div>
+                <div class="manage-pack-name">${selectedPack.name}</div>
+                <div class="manage-pack-sub">Graphics Pack • Level ${selectedPack.level}</div>
+            </div>
+        `;
+    }
+
+    // Reset form
+    currentRating = 0;
+    document.getElementById("ratingComment").value = "";
+    updateStarInputs(0);
+
+    // Load existing comments
+    loadPackComments(packId);
+
+    document.getElementById("ratingPopup").classList.remove("hidden");
+}
+
+async function loadPackComments(packId) {
+    const r = await window.api.ratings.getPack(packId);
+    const commentsList = document.getElementById("commentsList");
+
+    if (r.success && r.comments && r.comments.length > 0) {
+        commentsList.innerHTML = r.comments.map((c, index) => `
+            <div class="comment-item">
+                <div class="comment-header">
+                    <div class="comment-author">${c.username}</div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div class="comment-date">${new Date(c.timestamp).toLocaleDateString('ar-SA')}</div>
+                        ${isAdmin() ? `<button class="delete-comment-btn" onclick="deleteComment('${packId}', ${index})">حذف</button>` : ''}
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                    <div class="rating-stars" style="transform:scale(0.8);transform-origin:left;">${renderStars(c.rating || 0)}</div>
+                    <span style="font-size:12px;color:rgba(255,255,255,0.4);">${c.rating || 0}/5</span>
+                </div>
+                <div class="comment-text">${c.comment}</div>
+            </div>
+        `).join('');
+    } else {
+        commentsList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);font-size:13px;padding:20px;">لا توجد تعليقات بعد</div>';
+    }
+}
+
+async function deleteComment(packId, commentIndex) {
+    if (!confirm("هل أنت متأكد من حذف هذا التعليق؟")) return;
+
+    const r = await window.api.ratings.deleteComment(packId, commentIndex, currentDiscordId);
+    if (r.success) {
+        showNotify("✅ تم حذف التعليق بنجاح");
+        await loadRatings();
+        loadPackComments(packId);
+    } else {
+        showNotify(`❌ ${r.message}`, "error");
+    }
+}
+
+function updateStarInputs(rating) {
+    const stars = document.querySelectorAll('.rating-star-input');
+    stars.forEach((star, index) => {
+        if (index < rating) {
+            star.classList.add('active');
+        } else {
+            star.classList.remove('active');
+        }
+    });
+    currentRating = rating;
+}
+
+async function submitRating() {
+    if (!selectedPack || currentRating === 0) {
+        showNotify("الرجاء اختيار تقييم", "error");
+        return;
+    }
+
+    const comment = document.getElementById("ratingComment").value;
+    const authResult = await window.api.auth.check();
+    const username = authResult.success ? (authResult.username || "Anonymous") : "Anonymous";
+
+    const r = await window.api.ratings.submit(selectedPack.id, currentRating, comment, username);
+    
+    if (r.success) {
+        showNotify("✅ تم إرسال تقييمك بنجاح!");
+        document.getElementById("ratingPopup").classList.add("hidden");
+        
+        // Reload ratings and update UI
+        await loadRatings();
+        loadPacks();
+    } else {
+        showNotify("❌ فشل إرسال التقييم", "error");
+    }
 }
 
 /* ── SLIDER ── */
@@ -70,6 +208,9 @@ function createPackCard(pack, unlocked) {
     const card = document.createElement("div");
     card.className = "pack-card-v2" + (unlocked ? "" : " locked");
 
+    const rating = getPackRating(pack.id);
+    const starsHtml = renderStars(rating.average);
+
     card.innerHTML = `
         <div class="pack-img-wrap">
             <img id="packImg_${pack.id}" src="${pack.images[0]}"
@@ -91,6 +232,16 @@ function createPackCard(pack, unlocked) {
         </div>
         <div class="pack-body-v2">
             <div class="pack-name-v2">${pack.name}</div>
+            <div class="pack-rating">
+                <div class="rating-stars">${starsHtml}</div>
+                <span class="rating-count">${rating.count > 0 ? `(${rating.count})` : ''}</span>
+                ${unlocked ? `<button class="rate-btn" onclick="openRatingPopup('${pack.id}')">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    </svg>
+                    قيّم
+                </button>` : ''}
+            </div>
             <div class="pack-meta">
                 <span class="pack-status-dot" style="background:${unlocked?'#00ffae':'#ff4d6a'};"></span>
                 <span class="pack-meta-tag">${unlocked ? "UNLOCKED" : "LOCKED"} • Graphics Pack</span>
@@ -244,7 +395,28 @@ async function logout() {
 async function init() {
     const ok = await checkAuth();
     if (!ok) return;
+
+    // Fetch packs from server
+    const fetched = await fetchPacksFromServer();
+    if (!fetched) {
+        showNotify("فشل تحميل البيانات من السيرفر", "error");
+        return;
+    }
+
+    await loadRatings();
     loadPacks();
+
+    // Setup rating stars click handlers
+    const starInputs = document.querySelectorAll('.rating-star-input');
+    starInputs.forEach(star => {
+        star.addEventListener('click', () => {
+            const rating = parseInt(star.dataset.rating);
+            updateStarInputs(rating);
+        });
+    });
+
+    // Setup submit button
+    document.getElementById('submitRatingBtn').addEventListener('click', submitRating);
 }
 
 init();

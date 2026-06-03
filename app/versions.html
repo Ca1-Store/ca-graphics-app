@@ -275,6 +275,185 @@
             background: rgba(255,77,109,0.08);
             border-color: rgba(255,77,109,0.25);
         }
+
+        /* ── Rating Stars ── */
+        .pack-rating {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .rating-stars {
+            display: flex;
+            gap: 3px;
+        }
+
+        .rating-star {
+            width: 16px;
+            height: 16px;
+            fill: #ffd700;
+        }
+
+        .rating-star.empty {
+            fill: rgba(255,255,255,0.15);
+        }
+
+        .rating-count {
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            font-weight: 500;
+        }
+
+        .rate-btn {
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.6);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.18s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .rate-btn:hover {
+            background: rgba(79,140,255,0.1);
+            border-color: rgba(79,140,255,0.2);
+            color: #7cb0ff;
+        }
+
+        /* ── Rating Popup ── */
+        .rating-popup-content {
+            width: 500px;
+            max-width: 92vw;
+            background: rgba(10,13,22,0.97);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 28px;
+            padding: 28px;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.6);
+            animation: popupOpen 0.22s ease;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .rating-stars-input {
+            display: flex;
+            gap: 8px;
+            margin: 16px 0;
+            justify-content: center;
+        }
+
+        .rating-star-input {
+            width: 36px;
+            height: 36px;
+            cursor: pointer;
+            fill: rgba(255,255,255,0.2);
+            transition: 0.2s ease;
+        }
+
+        .rating-star-input:hover,
+        .rating-star-input.active {
+            fill: #ffd700;
+            transform: scale(1.15);
+        }
+
+        .rating-comment-input {
+            width: 100%;
+            min-height: 100px;
+            padding: 14px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: #fff;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            margin-bottom: 16px;
+        }
+
+        .rating-comment-input:focus {
+            outline: none;
+            border-color: rgba(79,140,255,0.3);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .rating-submit-btn {
+            width: 100%;
+            height: 44px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #4f8cff, #356fff);
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.18s ease;
+            font-family: inherit;
+        }
+
+        .rating-submit-btn:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .comments-list {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .comment-item {
+            padding: 14px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .comment-author {
+            font-size: 13px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .comment-date {
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+        }
+
+        .comment-text {
+            font-size: 13px;
+            color: rgba(255,255,255,0.6);
+            line-height: 1.6;
+        }
+
+        .delete-comment-btn {
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: rgba(255,77,109,0.1);
+            border: 1px solid rgba(255,77,109,0.2);
+            color: #ff4d6a;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.18s ease;
+        }
+
+        .delete-comment-btn:hover {
+            background: rgba(255,77,109,0.2);
+            border-color: rgba(255,77,109,0.3);
+        }
     </style>
 </head>
 <body>
@@ -476,6 +655,38 @@
                 </div>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Rating Popup -->
+<div id="ratingPopup" class="popup hidden">
+    <div class="rating-popup-content">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <div>
+                <div class="popup-badge">RATE & REVIEW</div>
+                <h2 style="margin:0;font-size:20px;">قيم هذا الباك</h2>
+            </div>
+            <button onclick="document.getElementById('ratingPopup').classList.add('hidden')" class="popup-close-btn">×</button>
+        </div>
+
+        <div id="ratingPackPreview" class="manage-pack-preview"></div>
+
+        <div style="text-align:center;margin-bottom:12px;">
+            <div style="font-size:14px;color:rgba(255,255,255,0.5);margin-bottom:8px;">اضغط على النجوم للتقييم</div>
+            <div class="rating-stars-input" id="ratingStarsInput">
+                <svg class="rating-star-input" data-rating="1" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <svg class="rating-star-input" data-rating="2" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <svg class="rating-star-input" data-rating="3" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <svg class="rating-star-input" data-rating="4" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <svg class="rating-star-input" data-rating="5" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </div>
+        </div>
+
+        <textarea id="ratingComment" class="rating-comment-input" placeholder="اكتب تعليقك هنا (اختياري)..."></textarea>
+
+        <button id="submitRatingBtn" class="rating-submit-btn">إرسال التقييم</button>
+
+        <div id="commentsList" class="comments-list"></div>
     </div>
 </div>
 

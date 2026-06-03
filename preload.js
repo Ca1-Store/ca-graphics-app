@@ -78,4 +78,16 @@ contextBridge.exposeInMainWorld("api", {
     restoreNetwork:         () => ipcRenderer.invoke("performance:restoreNetwork"),
     restoreRAM:             () => ipcRenderer.invoke("performance:restoreRAM"),
     restoreAll:             () => ipcRenderer.invoke("performance:restoreAll"),
+
+    /* ── Ratings ── */
+    ratings: {
+        get: () => ipcRenderer.invoke("ratings:get"),
+        getPack: (packId) => ipcRenderer.invoke("ratings:getPack", packId),
+        submit: (packId, rating, comment, username) =>
+            ipcRenderer.invoke("ratings:submit", { packId, rating, comment, username }),
+        deleteComment: (packId, commentIndex, username) =>
+            ipcRenderer.invoke("ratings:deleteComment", { packId, commentIndex, username }),
+        deleteRating: (packId, ratingIndex, username) =>
+            ipcRenderer.invoke("ratings:deleteRating", { packId, ratingIndex, username }),
+    },
 });
