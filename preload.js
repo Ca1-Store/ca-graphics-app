@@ -90,4 +90,15 @@ contextBridge.exposeInMainWorld("api", {
         deleteRating: (packId, ratingIndex, username) =>
             ipcRenderer.invoke("ratings:deleteRating", { packId, ratingIndex, username }),
     },
+
+    /* ── Auto Update ── */
+    checkUpdate: () => ipcRenderer.invoke("update:check"),
+    onUpdateStatus: (cb) => {
+        ipcRenderer.removeAllListeners("update:status");
+        ipcRenderer.on("update:status", (_, d) => cb(d));
+    },
+    onUpdateProgress: (cb) => {
+        ipcRenderer.removeAllListeners("update:progress");
+        ipcRenderer.on("update:progress", (_, d) => cb(d));
+    },
 });

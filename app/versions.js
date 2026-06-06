@@ -14,6 +14,10 @@ let currentDiscordId = null;
 const ADMIN_DISCORD_ID = "1336347875206234292";
 const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
 
+// Version system state
+let selectedVersion = {};
+let versionDropdowns = {};
+
 function isAdmin() {
     return currentDiscordId === ADMIN_DISCORD_ID;
 }
@@ -203,24 +207,219 @@ function startSlider(packId, images, imgEl) {
     }, 3000);
 }
 
+/* ── VERSION SYSTEM FUNCTIONS ── */
+function getPackVersions(pack) {
+    // Use versions from server data
+    return pack.versions || [
+        {
+            version: "1.0",
+            date: "2023-09-10",
+            latest: true,
+            size: "380 MB",
+            features: ["الإصدار الأولي", "جرافيكس أساسي"],
+            changelog: "الإصدار الأولي من باك الجرافيكس",
+            url: pack.url
+        }
+    ];
+}
+
+function toggleVersionDropdown(packId) {
+    const dropdown = document.getElementById(`versionDropdown_${packId}`);
+    const selector = document.getElementById(`versionSelector_${packId}`);
+
+    if (dropdown.classList.contains('show')) {
+        dropdown.classList.remove('show');
+        selector.classList.remove('open');
+    } else {
+        // Close all other dropdowns
+        Object.keys(versionDropdowns).forEach(id => {
+            if (id !== packId) {
+                const d = document.getElementById(`versionDropdown_${id}`);
+                const s = document.getElementById(`versionSelector_${id}`);
+                if (d) d.classList.remove('show');
+                if (s) s.classList.remove('open');
+            }
+        });
+
+        dropdown.classList.add('show');
+        selector.classList.add('open');
+    }
+}
+
+function selectVersion(packId, version) {
+    selectedVersion[packId] = version;
+
+    // Update UI
+    const selectorCurrent = document.getElementById(`versionSelectorCurrent_${packId}`);
+    if (selectorCurrent) {
+        selectorCurrent.textContent = `v${version.version}`;
+    }
+
+    // Update version badge in card corner
+    const versionBadge = document.querySelector(`.version-badge[data-pack="${packId}"]`);
+    if (versionBadge) {
+        versionBadge.innerHTML = `v${version.version}${version.latest ? '<span class="new-tag">جديد</span>' : ''}`;
+        if (version.latest) {
+            versionBadge.classList.add('new');
+        } else {
+            versionBadge.classList.remove('new');
+        }
+    }
+
+    // Update dropdown options
+    const dropdown = document.getElementById(`versionDropdown_${packId}`);
+    if (dropdown) {
+        dropdown.querySelectorAll('.version-option').forEach(opt => {
+            opt.classList.remove('active');
+            if (opt.dataset.version === version.version) {
+                opt.classList.add('active');
+            }
+        });
+    }
+
+    // Update timeline dots
+    const pack = packs.find(p => p.id === packId);
+    const versions = getPackVersions(pack);
+    const timelineDots = document.querySelectorAll(`.version-dot[data-pack="${packId}"]`);
+    timelineDots.forEach((dot, index) => {
+        dot.classList.remove('active');
+        if (versions[index].version === version.version) {
+            dot.classList.add('active');
+        }
+    });
+
+    // Update version info (size, date)
+    const versionInfo = document.querySelector(`.version-info[data-pack="${packId}"]`);
+    if (versionInfo) {
+        const sizeItem = versionInfo.querySelector('.version-info-item:nth-child(1)');
+        const dateItem = versionInfo.querySelector('.version-info-item:nth-child(2)');
+        if (sizeItem) {
+            sizeItem.innerHTML = `
+                <svg fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                ${version.size}
+            `;
+        }
+        if (dateItem) {
+            dateItem.innerHTML = `
+                <svg fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                ${version.date}
+            `;
+        }
+    }
+
+    // Update install button text
+    const installBtn = document.querySelector(`.pack-install-btn[data-pack="${packId}"]`);
+    if (installBtn) {
+        installBtn.textContent = `تثبيت v${version.version}`;
+    }
+
+    // Close dropdown
+    toggleVersionDropdown(packId);
+}
+
+function openVersionDetails(packId) {
+    const pack = packs.find(p => p.id === packId);
+    if (!pack) return;
+
+    const versions = getPackVersions(pack);
+
+    // Update panel content
+    document.getElementById('versionDetailsTitle').textContent = pack.name;
+    document.getElementById('versionDetailsSubtitle').textContent = `تاريخ الإصدارات والتحديثات`;
+
+    // Render changelog
+    const changelogList = document.getElementById('changelogList');
+    changelogList.innerHTML = versions.map(v => `
+        <div class="changelog-item">
+            <div class="changelog-item-header">
+                <div class="changelog-version">v${v.version} ${v.latest ? '<span class="version-option-badge latest">الأحدث</span>' : ''}</div>
+                <div class="changelog-date">${v.date}</div>
+            </div>
+            <div class="changelog-description">${v.changelog}</div>
+            <div class="changelog-features">
+                ${v.features.map(f => `<div class="changelog-feature">${f}</div>`).join('')}
+            </div>
+        </div>
+    `).join('');
+
+    // Render comparison table
+    const comparisonTable = document.getElementById('comparisonTable');
+    comparisonTable.innerHTML = `
+        <tr class="comparison-row">
+            <td class="comparison-cell feature">حجم الملف</td>
+            ${versions.map(v => `<td class="comparison-cell">${v.size}</td>`).join('')}
+        </tr>
+        <tr class="comparison-row">
+            <td class="comparison-cell feature">تاريخ الإصدار</td>
+            ${versions.map(v => `<td class="comparison-cell">${v.date}</td>`).join('')}
+        </tr>
+        <tr class="comparison-row">
+            <td class="comparison-cell feature">الأداء</td>
+            ${versions.map((v, i) => `<td class="comparison-cell ${i === 0 ? 'highlight' : ''}">${i === 0 ? 'محسّن' : 'عادي'}</td>`).join('')}
+        </tr>
+        <tr class="comparison-row">
+            <td class="comparison-cell feature">الإضاءة</td>
+            ${versions.map((v, i) => `<td class="comparison-cell ${i === 0 ? 'highlight' : ''}">${i === 0 ? 'محسّنة' : 'أساسية'}</td>`).join('')}
+        </tr>
+    `;
+
+    // Show panel
+    document.getElementById('versionDetailsOverlay').classList.add('open');
+    document.getElementById('versionDetailsPanel').classList.add('open');
+}
+
+function closeVersionDetails() {
+    document.getElementById('versionDetailsOverlay').classList.remove('open');
+    document.getElementById('versionDetailsPanel').classList.remove('open');
+}
+
+// Close panel when clicking overlay
+document.getElementById('versionDetailsOverlay').addEventListener('click', closeVersionDetails);
+
 /* ── CARD ── */
 function createPackCard(pack, unlocked) {
     const card = document.createElement("div");
-    card.className = "pack-card-v2" + (unlocked ? "" : " locked");
+    card.className = "pack-card-v3" + (unlocked ? "" : " locked");
 
     const rating = getPackRating(pack.id);
     const starsHtml = renderStars(rating.average);
+    const versions = getPackVersions(pack);
+    const currentVer = selectedVersion[pack.id] || versions[0];
 
     card.innerHTML = `
         <div class="pack-img-wrap">
             <img id="packImg_${pack.id}" src="${pack.images[0]}"
                 style="transition:transform 0.4s ease,opacity 0.6s ease;" />
             <div class="pack-img-gradient"></div>
-            <div class="pack-level-badge">LEVEL ${pack.level}</div>
-            ${unlocked && pack.images.length > 1 ? `
-            <div class="pack-dots">
-                ${pack.images.map((_,i) => `<div id="dot_${pack.id}_${i}" class="pack-dot${i===0?' active':''}"></div>`).join("")}
-            </div>` : ""}
+            
+            <div class="version-badge ${currentVer.latest ? 'new' : ''}" data-pack="${pack.id}">
+                v${currentVer.version}
+                ${currentVer.latest ? '<span class="new-tag">جديد</span>' : ''}
+            </div>
+            
+            ${unlocked ? `
+            <div class="version-timeline">
+                <span class="version-timeline-label">الإصدارات</span>
+                <div class="version-dots">
+                    ${versions.map((v, i) => `
+                        <div class="version-dot ${v.version === currentVer.version ? 'active' : ''} ${v.latest ? 'latest' : ''}"
+                             data-pack="${pack.id}"
+                             data-version="${v.version}"
+                             onclick="selectVersion('${pack.id}', ${JSON.stringify(v).replace(/"/g, '&quot;')})">
+                        </div>
+                    `).join('')}
+                </div>
+                <span class="version-count">${versions.length}</span>
+            </div>
+            ` : ''}
+            
             ${!unlocked ? `
             <div class="pack-lock-cover">
                 <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -230,8 +429,61 @@ function createPackCard(pack, unlocked) {
                 هذا الباك مو في نسختك
             </div>` : ""}
         </div>
-        <div class="pack-body-v2">
-            <div class="pack-name-v2">${pack.name}</div>
+        <div class="pack-body-v3">
+            <div class="pack-header">
+                <div>
+                    <div class="pack-name-v3">${pack.name}</div>
+                    <div class="pack-category">Graphics Pack • Level ${pack.level}</div>
+                </div>
+                ${unlocked ? `
+                <div class="version-selector" id="versionSelector_${pack.id}" onclick="toggleVersionDropdown('${pack.id}')">
+                    <span class="version-selector-current" id="versionSelectorCurrent_${pack.id}">v${currentVer.version}</span>
+                    <svg class="version-selector-arrow" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9l6 6 6-6"></path>
+                    </svg>
+                    <div class="version-dropdown" id="versionDropdown_${pack.id}">
+                        ${versions.map(v => `
+                            <div class="version-option ${v.version === currentVer.version ? 'active' : ''}" 
+                                 data-version="${v.version}"
+                                 onclick="event.stopPropagation(); selectVersion('${pack.id}', ${JSON.stringify(v).replace(/"/g, '&quot;')})">
+                                <div class="version-option-left">
+                                    <span class="version-option-number">v${v.version}</span>
+                                    <span class="version-option-date">${v.date}</span>
+                                </div>
+                                ${v.latest ? '<span class="version-option-badge latest">Latest</span>' : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+            
+            ${unlocked ? `
+            <div class="version-info" data-pack="${pack.id}">
+                <div class="version-info-item">
+                    <svg fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    ${currentVer.size}
+                </div>
+                <div class="version-info-item">
+                    <svg fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    ${currentVer.date}
+                </div>
+                <div class="version-info-item" style="cursor:pointer;" onclick="openVersionDetails('${pack.id}')">
+                    <svg fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    عرض التاريخ
+                </div>
+            </div>
+            ` : ''}
+            
             <div class="pack-rating">
                 <div class="rating-stars">${starsHtml}</div>
                 <span class="rating-count">${rating.count > 0 ? `(${rating.count})` : ''}</span>
@@ -242,14 +494,11 @@ function createPackCard(pack, unlocked) {
                     قيّم
                 </button>` : ''}
             </div>
-            <div class="pack-meta">
-                <span class="pack-status-dot" style="background:${unlocked?'#00ffae':'#ff4d6a'};"></span>
-                <span class="pack-meta-tag">${unlocked ? "UNLOCKED" : "LOCKED"} • Graphics Pack</span>
-            </div>
+            
             <div class="pack-actions">
                 ${unlocked ? `
-                <button class="pack-install-btn" onclick="downloadPack('${pack.id}',this)">
-                    Install
+                <button class="pack-install-btn" data-pack="${pack.id}" onclick="downloadPack('${pack.id}',this)">
+                    تثبيت v${currentVer.version}
                 </button>
                 <button class="pack-manage-btn" onclick="openPackSettings('${pack.id}')" title="Manage">
                     <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
@@ -258,7 +507,7 @@ function createPackCard(pack, unlocked) {
                     </svg>
                 </button>
                 ` : `
-                <button class="pack-install-btn" style="opacity:0.3;cursor:not-allowed;background:rgba(255,255,255,0.08);" disabled>Locked</button>
+                <button class="pack-install-btn" style="opacity:0.3;cursor:not-allowed;background:rgba(255,255,255,0.08);" disabled>مقفل</button>
                 `}
             </div>
         </div>
@@ -296,9 +545,17 @@ async function downloadPack(id, btn) {
     if (!pack) return;
     if (btn) { btn.disabled = true; btn.textContent = "جاري..."; }
 
+    // Get selected version URL
+    const currentVer = selectedVersion[id] || getPackVersions(pack)[0];
+    const downloadUrl = currentVer.url || pack.url;
+
     localStorage.setItem("pending_download", JSON.stringify({
-        url: pack.url, name: pack.name,
-        productId: pack.id, type: "pack", deleteFirst: true
+        url: downloadUrl,
+        name: `${pack.name} v${currentVer.version}`,
+        productId: pack.id,
+        type: "pack",
+        deleteFirst: true,
+        version: currentVer.version
     }));
     window.api.openPage("downloads.html");
 }

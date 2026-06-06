@@ -173,6 +173,59 @@ function createWindow() {
 
 
 
+/* ============================================================
+
+   AUTO UPDATER
+
+============================================================ */
+
+autoUpdater.setFeedURL({
+    provider: "github",
+    owner: "Ca1-Store",
+    repo: "ca-graphics-app"
+});
+
+autoUpdater.on("checking-for-update", () => {
+    console.log("Checking for update...");
+    send("update:status", { status: "checking", message: "جاري التحقق من التحديثات..." });
+});
+
+autoUpdater.on("update-available", (info) => {
+    console.log("Update available:", info);
+    send("update:status", { status: "available", message: "تحديث جديد متاح!", version: info.version });
+});
+
+autoUpdater.on("update-not-available", (info) => {
+    console.log("Update not available:", info);
+    send("update:status", { status: "none", message: "البرنامج محدث" });
+});
+
+autoUpdater.on("error", (err) => {
+    console.error("Update error:", err);
+    send("update:status", { status: "error", message: "خطأ في التحقق من التحديثات" });
+});
+
+autoUpdater.on("download-progress", (progress) => {
+    console.log("Download progress:", progress);
+    send("update:progress", {
+        percent: Math.floor(progress.percent),
+        speed: progress.bytesPerSecond
+    });
+});
+
+autoUpdater.on("update-downloaded", (info) => {
+    console.log("Update downloaded:", info);
+    send("update:status", { status: "downloaded", message: "تم تحميل التحديث، سيتم التثبيت..." });
+    autoUpdater.quitAndInstall();
+});
+
+ipcMain.handle("update:check", () => {
+    autoUpdater.checkForUpdates();
+    return { success: true };
+});
+
+
+
 app.whenReady().then(() => {
 
     createWindow();

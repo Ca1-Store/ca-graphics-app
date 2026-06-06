@@ -6,36 +6,38 @@
     <title>CA Store - Graphics Packs</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* ── Pack Card Redesign ── */
-        .pack-card-v2 {
+        /* ── Pack Card Redesign with Version System ── */
+        .pack-card-v3 {
             position: relative;
-            background: rgba(14,18,28,0.9);
-            border: 1px solid rgba(255,255,255,0.07);
+            background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.9));
+            border: 1px solid rgba(71, 85, 105, 0.2);
             border-radius: 20px;
-            overflow: hidden;
-            transition: 0.2s ease;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            overflow: visible;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 380px;
         }
 
-        .pack-card-v2:hover {
-            border-color: rgba(79,140,255,0.25);
+        .pack-card-v3:hover {
+            border-color: rgba(99, 102, 241, 0.3);
             transform: translateY(-4px);
-            box-shadow: 0 16px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(79,140,255,0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.1);
         }
 
-        .pack-card-v2.locked {
-            opacity: 0.55;
-            filter: grayscale(0.5);
+        .pack-card-v3.locked {
+            opacity: 0.5;
+            filter: grayscale(0.6);
         }
 
-        .pack-card-v2.locked:hover {
+        .pack-card-v3.locked:hover {
             transform: none;
-            border-color: rgba(255,77,109,0.2);
+            border-color: rgba(220, 38, 38, 0.3);
         }
 
         .pack-img-wrap {
             position: relative;
-            height: 160px;
+            height: 180px;
             overflow: hidden;
         }
 
@@ -44,100 +46,310 @@
             height: 100%;
             object-fit: cover;
             display: block;
-            transition: transform 0.4s ease, opacity 0.6s ease;
+            transition: transform 0.4s ease;
         }
 
-        .pack-card-v2:hover .pack-img-wrap img {
-            transform: scale(1.04);
+        .pack-card-v3:hover .pack-img-wrap img {
+            transform: scale(1.05);
         }
 
         .pack-img-gradient {
             position: absolute;
             inset: 0;
-            background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.7) 100%);
+            background: linear-gradient(180deg, transparent 30%, rgba(15, 23, 42, 0.9) 100%);
         }
 
-        .pack-level-badge {
+        /* Version Badge */
+        .version-badge {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            padding: 4px 10px;
+            top: 12px;
+            right: 12px;
+            padding: 6px 14px;
             border-radius: 999px;
-            background: rgba(0,0,0,0.55);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.1);
-            font-size: 10px;
+            background: rgba(99, 102, 241, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            font-size: 11px;
             font-weight: 700;
-            color: #fff;
-            letter-spacing: 0.1em;
-        }
-
-        .pack-dots {
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
+            color: #a5b4fc;
+            letter-spacing: 0.05em;
             display: flex;
-            gap: 5px;
-            z-index: 3;
+            align-items: center;
+            gap: 6px;
+            z-index: 5;
         }
 
-        .pack-dot {
-            width: 5px; height: 5px;
+        .version-badge.new {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: rgba(34, 197, 94, 0.4);
+            color: #86efac;
+        }
+
+        .version-badge .new-tag {
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(34, 197, 94, 0.3);
+            color: #86efac;
+        }
+
+        /* Version Timeline */
+        .version-timeline {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            right: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 5;
+        }
+
+        .version-timeline-label {
+            font-size: 10px;
+            color: rgba(148, 163, 184, 0.7);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .version-dots {
+            display: flex;
+            gap: 6px;
+            flex: 1;
+        }
+
+        .version-dot {
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            background: rgba(255,255,255,0.4);
-            transition: background 0.3s, transform 0.3s;
+            background: rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
         }
 
-        .pack-dot.active {
-            background: #fff;
+        .version-dot:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(1.2);
+        }
+
+        .version-dot.active {
+            background: #a5b4fc;
+            border-color: rgba(99, 102, 241, 0.5);
             transform: scale(1.3);
+        }
+
+        .version-dot.latest {
+            background: #86efac;
+            border-color: rgba(34, 197, 94, 0.5);
+        }
+
+        .version-count {
+            font-size: 10px;
+            color: rgba(148, 163, 184, 0.6);
+            font-weight: 600;
         }
 
         .pack-lock-cover {
             position: absolute;
             inset: 0;
-            background: rgba(0,0,0,0.6);
+            background: rgba(0, 0, 0, 0.7);
             backdrop-filter: blur(4px);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             gap: 8px;
-            color: rgba(255,255,255,0.7);
+            color: rgba(255, 255, 255, 0.7);
             font-size: 12px;
             font-weight: 600;
-            z-index: 4;
+            z-index: 6;
         }
 
-        .pack-body-v2 {
-            padding: 16px;
+        .pack-body-v3 {
+            padding: 18px;
+            overflow: visible;
         }
 
-        .pack-name-v2 {
-            font-size: 15px;
+        .pack-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            overflow: visible;
+        }
+
+        .pack-name-v3 {
+            font-size: 16px;
             font-weight: 800;
-            color: #fff;
+            color: #f1f5f9;
             margin-bottom: 4px;
             letter-spacing: -0.01em;
         }
 
-        .pack-meta {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 14px;
-        }
-
-        .pack-meta-tag {
+        .pack-category {
             font-size: 11px;
-            color: rgba(255,255,255,0.35);
+            color: rgba(148, 163, 184, 0.6);
             font-weight: 500;
         }
 
-        .pack-status-dot {
-            width: 5px; height: 5px;
-            border-radius: 50%;
+        /* Version Selector */
+        .version-selector {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(71, 85, 105, 0.2);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .version-selector:hover {
+            background: rgba(51, 65, 85, 0.6);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .version-selector-current {
+            font-size: 13px;
+            font-weight: 700;
+            color: #a5b4fc;
+        }
+
+        .version-selector-arrow {
+            width: 16px;
+            height: 16px;
+            color: rgba(148, 163, 184, 0.5);
+            transition: transform 0.2s ease;
+        }
+
+        .version-selector.open .version-selector-arrow {
+            transform: rotate(180deg);
+        }
+
+        /* Version Dropdown */
+        .version-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            left: 0;
+            margin-top: 8px;
+            background: rgba(15, 23, 42, 0.98);
+            border: 1px solid rgba(71, 85, 105, 0.3);
+            border-radius: 12px;
+            padding: 6px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            display: none;
+            animation: dropdownOpen 0.2s ease;
+            min-width: 180px;
+        }
+
+        .version-dropdown.show {
+            display: block;
+        }
+
+        @keyframes dropdownOpen {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .version-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 4px;
+        }
+
+        .version-option:last-child {
+            margin-bottom: 0;
+        }
+
+        .version-option:hover {
+            background: rgba(51, 65, 85, 0.5);
+        }
+
+        .version-option.active {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .version-option-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .version-option-number {
+            font-size: 13px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .version-option-date {
+            font-size: 11px;
+            color: rgba(148, 163, 184, 0.5);
+        }
+
+        .version-option-badge {
+            font-size: 9px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .version-option-badge.latest {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+        }
+
+        .version-option-badge.beta {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fcd34d;
+        }
+
+        /* Version Info */
+        .version-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(71, 85, 105, 0.15);
+        }
+
+        .version-info-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: rgba(148, 163, 184, 0.7);
+        }
+
+        .version-info-item svg {
+            width: 14px;
+            height: 14px;
+            color: #a5b4fc;
         }
 
         .pack-actions {
@@ -147,41 +359,233 @@
 
         .pack-install-btn {
             flex: 1;
-            height: 38px;
+            height: 40px;
             border: none;
-            border-radius: 11px;
-            background: linear-gradient(135deg, #4f8cff, #356fff);
-            color: #fff;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #f8fafc;
             font-size: 13px;
             font-weight: 700;
             cursor: pointer;
-            transition: 0.18s ease;
+            transition: all 0.25s ease;
             font-family: inherit;
-            box-shadow: 0 6px 20px rgba(79,140,255,0.3);
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+            letter-spacing: 0.02em;
         }
 
         .pack-install-btn:hover {
-            filter: brightness(1.1);
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+            background: linear-gradient(135deg, #7c7ff2, #9d6ff7);
         }
 
         .pack-manage-btn {
-            width: 38px; height: 38px;
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 11px;
-            background: rgba(255,255,255,0.05);
-            color: rgba(255,255,255,0.6);
+            width: 40px;
+            height: 40px;
+            border: 1px solid rgba(71, 85, 105, 0.3);
+            border-radius: 12px;
+            background: rgba(30, 41, 59, 0.5);
+            color: rgba(148, 163, 184, 0.7);
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: 0.18s ease;
+            transition: all 0.2s ease;
             flex-shrink: 0;
         }
 
         .pack-manage-btn:hover {
-            background: rgba(255,255,255,0.1);
-            color: #fff;
+            background: rgba(51, 65, 85, 0.6);
+            border-color: rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+        }
+
+        /* ── Version Details Panel ── */
+        .version-details-panel {
+            position: fixed;
+            top: 0;
+            right: -500px;
+            width: 480px;
+            height: 100%;
+            background: linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.95));
+            border-left: 1px solid rgba(71, 85, 105, 0.3);
+            box-shadow: -20px 0 60px rgba(0, 0, 0, 0.6);
+            z-index: 2000;
+            transition: right 0.3s ease;
+            overflow-y: auto;
+            backdrop-filter: blur(20px);
+        }
+
+        .version-details-panel.open {
+            right: 0;
+        }
+
+        .version-details-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            z-index: 1999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .version-details-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .version-details-header {
+            padding: 24px;
+            border-bottom: 1px solid rgba(71, 85, 105, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .version-details-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        .version-details-subtitle {
+            font-size: 13px;
+            color: rgba(148, 163, 184, 0.7);
+        }
+
+        .version-details-close {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(71, 85, 105, 0.3);
+            color: rgba(148, 163, 184, 0.7);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .version-details-close:hover {
+            background: rgba(51, 65, 85, 0.6);
+            border-color: rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+        }
+
+        .version-details-content {
+            padding: 24px;
+        }
+
+        /* Changelog Section */
+        .changelog-section {
+            margin-bottom: 24px;
+        }
+
+        .changelog-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #a5b4fc;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .changelog-item {
+            padding: 14px;
+            border-radius: 12px;
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(71, 85, 105, 0.15);
+            margin-bottom: 10px;
+        }
+
+        .changelog-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .changelog-version {
+            font-size: 13px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .changelog-date {
+            font-size: 11px;
+            color: rgba(148, 163, 184, 0.5);
+        }
+
+        .changelog-description {
+            font-size: 13px;
+            color: rgba(148, 163, 184, 0.7);
+            line-height: 1.6;
+        }
+
+        .changelog-features {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .changelog-feature {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: rgba(148, 163, 184, 0.6);
+        }
+
+        .changelog-feature::before {
+            content: "•";
+            color: #a5b4fc;
+            font-weight: 700;
+        }
+
+        /* Version Comparison */
+        .version-comparison {
+            margin-bottom: 24px;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .comparison-row {
+            border-bottom: 1px solid rgba(71, 85, 105, 0.1);
+        }
+
+        .comparison-row:last-child {
+            border-bottom: none;
+        }
+
+        .comparison-cell {
+            padding: 12px 8px;
+            font-size: 13px;
+            color: rgba(148, 163, 184, 0.7);
+        }
+
+        .comparison-cell.feature {
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+
+        .comparison-cell.highlight {
+            background: rgba(34, 197, 94, 0.1);
+            color: #86efac;
+        }
+
+        .comparison-cell.missing {
+            color: rgba(148, 163, 184, 0.4);
         }
 
         /* ── Manage Popup Redesign ── */
@@ -589,6 +993,42 @@
         </div>
     </main>
 
+</div>
+
+<!-- Version Details Panel -->
+<div id="versionDetailsOverlay" class="version-details-overlay"></div>
+<div id="versionDetailsPanel" class="version-details-panel">
+    <div class="version-details-header">
+        <div>
+            <div class="version-details-title" id="versionDetailsTitle">Pack Name</div>
+            <div class="version-details-subtitle" id="versionDetailsSubtitle">Version History & Changelog</div>
+        </div>
+        <button onclick="closeVersionDetails()" class="version-details-close">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"></path>
+            </svg>
+        </button>
+    </div>
+    <div class="version-details-content">
+        <div class="changelog-section">
+            <div class="changelog-title">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Version History
+            </div>
+            <div id="changelogList"></div>
+        </div>
+        <div class="version-comparison">
+            <div class="changelog-title">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                Feature Comparison
+            </div>
+            <table class="comparison-table" id="comparisonTable"></table>
+        </div>
+    </div>
 </div>
 
 <!-- Manage Popup -->
