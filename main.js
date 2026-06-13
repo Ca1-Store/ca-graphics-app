@@ -406,6 +406,19 @@ function createWindow() {
 
 }
 
+function quitApp() {
+    app.isQuitting = true;
+    stopFiveMMonitoring();
+    if (tray) {
+        tray.destroy();
+        tray = null;
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.close();
+    }
+    app.quit();
+}
+
 function createTray() {
     try {
         // استخدام أيقونة من ملف icon.ico
@@ -418,7 +431,7 @@ function createTray() {
     
     const contextMenu = Menu.buildFromTemplate([
         { label: 'إظهار البرنامج', click: () => mainWindow.show() },
-        { label: 'إغلاق البرنامج', click: () => { app.isQuitting = true; app.quit(); } }
+        { label: 'إغلاق البرنامج', click: () => quitApp() }
     ]);
     
     tray.setToolTip('CA Graphics Protection');
@@ -499,6 +512,12 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
     stopFiveMMonitoring();
+});
+
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+        app.quit();
+    }
 });
 
 
