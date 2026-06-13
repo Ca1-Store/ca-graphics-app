@@ -408,8 +408,9 @@ function createWindow() {
 
 function createTray() {
     try {
-        // استخدام أيقونة فارغة مؤقتاً
-        tray = new Tray(null);
+        // استخدام أيقونة من ملف icon.ico
+        const iconPath = path.join(__dirname, 'build', 'icon.ico');
+        tray = new Tray(iconPath);
     } catch (err) {
         console.error('Failed to create tray:', err);
         return;
