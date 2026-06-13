@@ -1,13 +1,13 @@
 {
   "name": "ca-graphics-app",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "CA Store Graphics Installer",
   "main": "main.js",
-"scripts": {
-  "start": "electron .",
-  "build": "electron-builder",
-  "publish": "electron-builder --publish always"
-},
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "publish": "electron-builder --publish always"
+  },
   "keywords": [],
   "author": "CA Store",
   "license": "MIT",
@@ -32,19 +32,17 @@
     "pg": "^8.20.0",
     "unzipper": "^0.12.3"
   },
-"build": {
-  "appId": "com.castore.graphicsapp",
-  "productName": "Ca App",
-
-  "win": {
-    "target": "nsis",
-    "icon": "build/icon.ico"
-  },
-
-"publish": {
-  "provider": "github",
-  "owner": "Ca1-Store",
-  "repo": "ca-graphics-app"
-}
-}
+  "build": {
+    "appId": "com.castore.graphicsapp",
+    "productName": "Ca App",
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Ca1-Store",
+      "repo": "ca-graphics-app"
+    }
+  }
 }

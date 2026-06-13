@@ -1,10 +1,11 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
 const https = require("https");
 const http = require("http");
 const { exec } = require("child_process");
+const crypto = require("crypto");
 
 let unzipper;
 try { unzipper = require("unzipper"); } catch { unzipper = null; }
@@ -12,6 +13,7 @@ try { unzipper = require("unzipper"); } catch { unzipper = null; }
 
 
 let mainWindow;
+let tray = null;
 
 
 
@@ -53,7 +55,7 @@ const BACKEND_URL      = "https://ca-backend-app-production.up.railway.app";
 
 const FIVEM_INDICATORS = ["citizen", "plugins", "mods", "logs", "data", "bin"];
 
-const GRAPHICS_FOLDERS = ["citizen", "plugins", "mods"];
+const GRAPHICS_FOLDERS = ["citizen", "plugins", "mods"]; // إعادة mods للقائمة
 
 const SESSION_PATH     = path.join(app.getPath("userData"), "session.json");
 
@@ -66,6 +68,223 @@ const LAUNCHERS = [
     { url: "http://213.199.63.97/CA%20-%20L2.exe", fileName: "CA - L2.exe" }
 
 ];
+
+
+
+/* ============================================================
+
+   ENCRYPTION - تشفير الملفات لحمايتها
+
+============================================================ */
+
+const ENCRYPTION_KEY = crypto.createHash('sha256').update('CA-GRAPHICS-PROTECTION-KEY-2024').digest();
+const ALGORITHM = 'aes-256-cbc';
+const IV_LENGTH = 16;
+
+// تشفير مرتبط بـ HWID لمنع نقل الملفات لأجهزة أخرى
+let hwidKey = null;
+try {
+    const { machineIdSync } = require("node-machine-id");
+    hwidKey = crypto.createHash('sha256').update(machineIdSync()).digest();
+} catch {
+    hwidKey = crypto.createHash('sha256').update('FALLBACK-HWID-KEY').digest();
+}
+
+// دمج المفتاح الأساسي مع HWID لإنشاء مفتاح فريد لكل جهاز
+const FINAL_ENCRYPTION_KEY = crypto.createHash('sha256')
+    .update(Buffer.concat([ENCRYPTION_KEY, hwidKey]))
+    .digest();
+
+let isFiveMRunning = false;
+let monitoringInterval = null;
+
+function encryptFile(filePath) {
+    try {
+        const data = fs.readFileSync(filePath);
+        const iv = crypto.randomBytes(IV_LENGTH);
+        const cipher = crypto.createCipheriv(ALGORITHM, FINAL_ENCRYPTION_KEY, iv);
+        
+        let encrypted = cipher.update(data);
+        encrypted = Buffer.concat([encrypted, cipher.final()]);
+        
+        const encryptedData = Buffer.concat([iv, encrypted]);
+        fs.writeFileSync(filePath, encryptedData);
+        
+        const newPath = filePath + '.enc';
+        fs.renameSync(filePath, newPath);
+        
+        return true;
+    } catch (err) {
+        console.error('Encryption error:', err);
+        return false;
+    }
+}
+
+function decryptFile(encryptedPath) {
+    try {
+        const encryptedData = fs.readFileSync(encryptedPath);
+        const iv = encryptedData.slice(0, IV_LENGTH);
+        const encrypted = encryptedData.slice(IV_LENGTH);
+        
+        const decipher = crypto.createDecipheriv(ALGORITHM, FINAL_ENCRYPTION_KEY, iv);
+        let decrypted = decipher.update(encrypted);
+        decrypted = Buffer.concat([decrypted, decipher.final()]);
+        
+        const originalPath = encryptedPath.replace('.enc', '');
+        fs.writeFileSync(originalPath, decrypted);
+        fs.unlinkSync(encryptedPath);
+        
+        return true;
+    } catch (err) {
+        console.error('Decryption error:', err);
+        return false;
+    }
+}
+
+async function encryptFolder(folderPath) {
+    try {
+        if (!fs.existsSync(folderPath)) return;
+        
+        await unhideAll(folderPath);
+        
+        const files = getAllFiles(folderPath);
+        for (const file of files) {
+            if (!file.endsWith('.enc')) {
+                encryptFile(file);
+            }
+        }
+        
+        await hide(folderPath);
+    } catch (err) {
+        console.error('Folder encryption error:', err);
+    }
+}
+
+async function decryptFolder(folderPath) {
+    try {
+        if (!fs.existsSync(folderPath)) return;
+        
+        await unhideAll(folderPath);
+        
+        const files = getAllFiles(folderPath);
+        for (const file of files) {
+            if (file.endsWith('.enc')) {
+                decryptFile(file);
+            }
+        }
+    } catch (err) {
+        console.error('Folder decryption error:', err);
+    }
+}
+
+function getAllFiles(dirPath, arrayOfFiles = []) {
+    const files = fs.readdirSync(dirPath);
+    
+    for (const file of files) {
+        const fullPath = path.join(dirPath, file);
+        if (fs.statSync(fullPath).isDirectory()) {
+            arrayOfFiles = getAllFiles(fullPath, arrayOfFiles);
+        } else {
+            arrayOfFiles.push(fullPath);
+        }
+    }
+    
+    return arrayOfFiles;
+}
+
+
+
+/* ============================================================
+
+   FIVEM PROCESS MONITORING - مراقبة عملية FiveM
+
+============================================================ */
+
+function checkFiveMProcess() {
+    return new Promise((resolve) => {
+        exec('tasklist', (err, stdout) => {
+            if (err) {
+                resolve(false);
+                return;
+            }
+            const isRunning = stdout.toLowerCase().includes('fivem') || 
+                            stdout.toLowerCase().includes('citizenfx');
+            resolve(isRunning);
+        });
+    });
+}
+
+async function startFiveMMonitoring() {
+    if (monitoringInterval) return;
+    
+    console.log('Starting FiveM process monitoring...');
+    
+    monitoringInterval = setInterval(async () => {
+        const isRunning = await checkFiveMProcess();
+        
+        if (isRunning && !isFiveMRunning) {
+            console.log('FiveM started - decrypting files...');
+            isFiveMRunning = true;
+            await autoDecrypt();
+        } else if (!isRunning && isFiveMRunning) {
+            console.log('FiveM closed - encrypting files...');
+            isFiveMRunning = false;
+            await autoEncrypt();
+        }
+    }, 3000);
+}
+
+function stopFiveMMonitoring() {
+    if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+        monitoringInterval = null;
+        console.log('Stopped FiveM process monitoring');
+    }
+}
+
+async function autoDecrypt() {
+    try {
+        if (!fs.existsSync(FIVEM_PATH_FILE)) return;
+        
+        const fivemPath = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
+        
+        // فك تشفير citizen و plugins فقط (استثناء mods)
+        for (const folder of ["citizen", "plugins"]) {
+            const dest = path.join(fivemPath, folder);
+            if (fs.existsSync(dest)) await decryptFolder(dest);
+        }
+        
+        // إظهار mods فقط (بدون تشفير)
+        const modsDest = path.join(fivemPath, "mods");
+        if (fs.existsSync(modsDest)) await unhideAll(modsDest);
+        
+        console.log('Auto-decrypt completed');
+    } catch (err) {
+        console.error('Auto-decrypt error:', err);
+    }
+}
+
+async function autoEncrypt() {
+    try {
+        if (!fs.existsSync(FIVEM_PATH_FILE)) return;
+        
+        const fivemPath = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
+        
+        // تشفير citizen و plugins فقط (استثناء mods)
+        for (const folder of ["citizen", "plugins"]) {
+            const dest = path.join(fivemPath, folder);
+            if (fs.existsSync(dest)) await encryptFolder(dest);
+        }
+        
+        // إخفاء mods فقط (بدون تشفير)
+        const modsDest = path.join(fivemPath, "mods");
+        if (fs.existsSync(modsDest)) await hide(modsDest);
+        
+        console.log('Auto-encrypt completed');
+    } catch (err) {
+        console.error('Auto-encrypt error:', err);
+    }
+}
 
 
 
@@ -157,6 +376,22 @@ function createWindow() {
 
 
 
+    // إخفاء النافذة بدلاً من إغلاقها عند الضغط على X
+
+    mainWindow.on('close', (event) => {
+
+        if (!app.isQuitting) {
+
+            event.preventDefault();
+
+            mainWindow.hide();
+
+        }
+
+    });
+
+
+
     // لما تتحمل صفحة جديدة أعد إرسال الحالة
 
     mainWindow.webContents.on("did-finish-load", () => {
@@ -169,6 +404,28 @@ function createWindow() {
 
     });
 
+}
+
+function createTray() {
+    try {
+        // استخدام أيقونة فارغة مؤقتاً
+        tray = new Tray(null);
+    } catch (err) {
+        console.error('Failed to create tray:', err);
+        return;
+    }
+    
+    const contextMenu = Menu.buildFromTemplate([
+        { label: 'إظهار البرنامج', click: () => mainWindow.show() },
+        { label: 'إغلاق البرنامج', click: () => { app.isQuitting = true; app.quit(); } }
+    ]);
+    
+    tray.setToolTip('CA Graphics Protection');
+    tray.setContextMenu(contextMenu);
+    
+    tray.on('double-click', () => {
+        mainWindow.show();
+    });
 }
 
 
@@ -230,8 +487,17 @@ app.whenReady().then(() => {
 
     createWindow();
 
+    createTray(); // إنشاء أيقونة Tray
+
     autoUpdater.checkForUpdatesAndNotify();
 
+    // تشغيل مراقبة FiveM
+    startFiveMMonitoring();
+
+});
+
+app.on('before-quit', () => {
+    stopFiveMMonitoring();
 });
 
 
@@ -731,17 +997,19 @@ ipcMain.handle("install:run", async (e, { zipPath, product }) => {
 
 
 
-        // 4. إخفاء
+        // 4. تشفير وإخفاء الملفات
 
-        setStage("hiding", "جاري حماية الملفات...");
+        setStage("hiding", "جاري تشفير وحماية الملفات...");
 
-        for (const folder of GRAPHICS_FOLDERS) {
-
+        // تشفير citizen و plugins فقط
+        for (const folder of ["citizen", "plugins"]) {
             const dest = path.join(fivemPath, folder);
-
-            if (fs.existsSync(dest)) await hide(dest);
-
+            if (fs.existsSync(dest)) await encryptFolder(dest);
         }
+
+        // إخفاء mods فقط (بدون تشفير)
+        const modsDest = path.join(fivemPath, "mods");
+        if (fs.existsSync(modsDest)) await hide(modsDest);
 
 
 
