@@ -1,6 +1,6 @@
 {
   "name": "ca-graphics-app",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "CA Store Graphics Installer",
   "main": "main.js",
   "scripts": {
@@ -39,6 +39,12 @@
       "target": "nsis",
       "icon": "build/icon.ico"
     },
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "build/icon.ico"
+      }
+    ],
     "publish": {
       "provider": "github",
       "owner": "Ca1-Store",

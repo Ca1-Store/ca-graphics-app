@@ -421,13 +421,28 @@ function quitApp() {
 
 function createTray() {
     try {
-        // استخدام أيقونة من ملف icon.ico
-        const iconPath = path.join(__dirname, 'build', 'icon.ico');
+        // استخدام مسار يعمل في وضع التطوير والنسخة المبنية
+        let iconPath;
+        
+        if (app.isPackaged) {
+            // في النسخة المبنية، الأيقونة تكون في resources
+            iconPath = path.join(process.resourcesPath, 'build', 'icon.ico');
+        } else {
+            // في وضع التطوير
+            iconPath = path.join(__dirname, 'build', 'icon.ico');
+        }
+        
+        console.log('Tray icon path:', iconPath);
         
         // التحقق من وجود الملف
         if (!fs.existsSync(iconPath)) {
             console.error('Icon file not found:', iconPath);
-            return;
+            // محاولة مسار بديل
+            iconPath = path.join(__dirname, '..', 'build', 'icon.ico');
+            if (!fs.existsSync(iconPath)) {
+                console.error('Alternative icon path also not found:', iconPath);
+                return;
+            }
         }
         
         // تحميل الأيقونة باستخدام nativeImage
@@ -459,6 +474,29 @@ function createTray() {
 }
 
 
+
+/* ============================================================
+
+   SINGLE INSTANCE LOCK - حماية من تشغيل أكثر من نسخة
+
+============================================================ */
+
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+    // نسخة أخرى تعمل بالفعل، نخرج من هذه النسخة
+    app.quit();
+} else {
+    // هذه هي النسخة الرئيسية
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+        // عندما يحاول المستخدم تشغيل نسخة ثانية
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+}
 
 /* ============================================================
 
