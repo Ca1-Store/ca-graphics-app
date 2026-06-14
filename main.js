@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
@@ -423,7 +423,23 @@ function createTray() {
     try {
         // استخدام أيقونة من ملف icon.ico
         const iconPath = path.join(__dirname, 'build', 'icon.ico');
-        tray = new Tray(iconPath);
+        
+        // التحقق من وجود الملف
+        if (!fs.existsSync(iconPath)) {
+            console.error('Icon file not found:', iconPath);
+            return;
+        }
+        
+        // تحميل الأيقونة باستخدام nativeImage
+        const icon = nativeImage.createFromPath(iconPath);
+        
+        if (icon.isEmpty()) {
+            console.error('Failed to load icon from:', iconPath);
+            return;
+        }
+        
+        tray = new Tray(icon);
+        console.log('Tray created successfully');
     } catch (err) {
         console.error('Failed to create tray:', err);
         return;
