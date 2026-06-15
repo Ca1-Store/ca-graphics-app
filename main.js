@@ -73,109 +73,12 @@ const LAUNCHERS = [
 
 /* ============================================================
 
-   ENCRYPTION - تشفير الملفات لحمايتها
+   FILE OPERATIONS - عمليات الملفات
 
 ============================================================ */
 
-const ENCRYPTION_KEY = crypto.createHash('sha256').update('CA-GRAPHICS-PROTECTION-KEY-2024').digest();
-const ALGORITHM = 'aes-256-cbc';
-const IV_LENGTH = 16;
-
-// تشفير مرتبط بـ HWID لمنع نقل الملفات لأجهزة أخرى
-let hwidKey = null;
-try {
-    const { machineIdSync } = require("node-machine-id");
-    hwidKey = crypto.createHash('sha256').update(machineIdSync()).digest();
-} catch {
-    hwidKey = crypto.createHash('sha256').update('FALLBACK-HWID-KEY').digest();
-}
-
-// دمج المفتاح الأساسي مع HWID لإنشاء مفتاح فريد لكل جهاز
-const FINAL_ENCRYPTION_KEY = crypto.createHash('sha256')
-    .update(Buffer.concat([ENCRYPTION_KEY, hwidKey]))
-    .digest();
-
 let isFiveMRunning = false;
 let monitoringInterval = null;
-
-function encryptFile(filePath) {
-    try {
-        const data = fs.readFileSync(filePath);
-        const iv = crypto.randomBytes(IV_LENGTH);
-        const cipher = crypto.createCipheriv(ALGORITHM, FINAL_ENCRYPTION_KEY, iv);
-        
-        let encrypted = cipher.update(data);
-        encrypted = Buffer.concat([encrypted, cipher.final()]);
-        
-        const encryptedData = Buffer.concat([iv, encrypted]);
-        fs.writeFileSync(filePath, encryptedData);
-        
-        const newPath = filePath + '.enc';
-        fs.renameSync(filePath, newPath);
-        
-        return true;
-    } catch (err) {
-        console.error('Encryption error:', err);
-        return false;
-    }
-}
-
-function decryptFile(encryptedPath) {
-    try {
-        const encryptedData = fs.readFileSync(encryptedPath);
-        const iv = encryptedData.slice(0, IV_LENGTH);
-        const encrypted = encryptedData.slice(IV_LENGTH);
-        
-        const decipher = crypto.createDecipheriv(ALGORITHM, FINAL_ENCRYPTION_KEY, iv);
-        let decrypted = decipher.update(encrypted);
-        decrypted = Buffer.concat([decrypted, decipher.final()]);
-        
-        const originalPath = encryptedPath.replace('.enc', '');
-        fs.writeFileSync(originalPath, decrypted);
-        fs.unlinkSync(encryptedPath);
-        
-        return true;
-    } catch (err) {
-        console.error('Decryption error:', err);
-        return false;
-    }
-}
-
-async function encryptFolder(folderPath) {
-    try {
-        if (!fs.existsSync(folderPath)) return;
-        
-        await unhideAll(folderPath);
-        
-        const files = getAllFiles(folderPath);
-        for (const file of files) {
-            if (!file.endsWith('.enc')) {
-                encryptFile(file);
-            }
-        }
-        
-        await hide(folderPath);
-    } catch (err) {
-        console.error('Folder encryption error:', err);
-    }
-}
-
-async function decryptFolder(folderPath) {
-    try {
-        if (!fs.existsSync(folderPath)) return;
-        
-        await unhideAll(folderPath);
-        
-        const files = getAllFiles(folderPath);
-        for (const file of files) {
-            if (file.endsWith('.enc')) {
-                decryptFile(file);
-            }
-        }
-    } catch (err) {
-        console.error('Folder decryption error:', err);
-    }
-}
 
 function getAllFiles(dirPath, arrayOfFiles = []) {
     const files = fs.readdirSync(dirPath);
@@ -248,15 +151,11 @@ async function autoDecrypt() {
         
         const fivemPath = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
         
-        // فك تشفير citizen و plugins فقط (استثناء mods)
-        for (const folder of ["citizen", "plugins"]) {
+        // إظهار جميع المجلدات (بدون تشفير)
+        for (const folder of ["citizen", "plugins", "mods"]) {
             const dest = path.join(fivemPath, folder);
-            if (fs.existsSync(dest)) await decryptFolder(dest);
+            if (fs.existsSync(dest)) await unhideAll(dest);
         }
-        
-        // إظهار mods فقط (بدون تشفير)
-        const modsDest = path.join(fivemPath, "mods");
-        if (fs.existsSync(modsDest)) await unhideAll(modsDest);
         
         console.log('Auto-decrypt completed');
     } catch (err) {
@@ -270,15 +169,11 @@ async function autoEncrypt() {
         
         const fivemPath = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
         
-        // تشفير citizen و plugins فقط (استثناء mods)
-        for (const folder of ["citizen", "plugins"]) {
+        // إخفاء جميع المجلدات (بدون تشفير)
+        for (const folder of ["citizen", "plugins", "mods"]) {
             const dest = path.join(fivemPath, folder);
-            if (fs.existsSync(dest)) await encryptFolder(dest);
+            if (fs.existsSync(dest)) await hide(dest);
         }
-        
-        // إخفاء mods فقط (بدون تشفير)
-        const modsDest = path.join(fivemPath, "mods");
-        if (fs.existsSync(modsDest)) await hide(modsDest);
         
         console.log('Auto-encrypt completed');
     } catch (err) {
@@ -1071,19 +966,15 @@ ipcMain.handle("install:run", async (e, { zipPath, product }) => {
 
 
 
-        // 4. تشفير وإخفاء الملفات
+        // 4. إخفاء الملفات (بدون تشفير)
 
-        setStage("hiding", "جاري تشفير وحماية الملفات...");
+        setStage("hiding", "جاري إخفاء الملفات...");
 
-        // تشفير citizen و plugins فقط
-        for (const folder of ["citizen", "plugins"]) {
+        // إخفاء جميع المجلدات (بدون تشفير)
+        for (const folder of ["citizen", "plugins", "mods"]) {
             const dest = path.join(fivemPath, folder);
-            if (fs.existsSync(dest)) await encryptFolder(dest);
+            if (fs.existsSync(dest)) await hide(dest);
         }
-
-        // إخفاء mods فقط (بدون تشفير)
-        const modsDest = path.join(fivemPath, "mods");
-        if (fs.existsSync(modsDest)) await hide(modsDest);
 
 
 
