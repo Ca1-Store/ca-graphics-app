@@ -1,269 +1,551 @@
 <!DOCTYPE html>
+
 <html lang="ar">
 
+
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>CA Store - Mods</title>
 
+
+
     <link rel="stylesheet" href="style.css">
+
 </head>
+
+
 
 <body>
 
+
+
     <div class="bg"></div>
 
+
+
     <!-- TOP BAR -->
+
     <div class="top-bar drag-region">
 
+
+
         <button class="win-btn no-drag" onclick="window.api.minimize()">—</button>
+
         <button class="win-btn no-drag" onclick="window.api.fullscreen()">□</button>
+
         <button class="win-btn close no-drag" onclick="window.api.close()">×</button>
 
+
+
     </div>
+
+
 
     <div class="app-shell no-drag">
 
+
+
         <!-- SIDEBAR (FIXED ONLY) -->
+
         <aside class="sidebar">
 
+
+
             <div class="sidebar-logo">
+
                 <div class="sidebar-logo-badge">CA</div>
+
                 <div class="sidebar-logo-text">
+
                     <span>CA STORE</span>
+
                     <span>Graphics Manager</span>
+
                 </div>
+
             </div>
+
+
 
             <div class="side-title">Store</div>
 
+
+
             <div class="side-btn" onclick="window.api.openPage('index.html')">
+
                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+
                     <path d="M3 10.5L9 3l6 7.5v6H3z"></path>
+
                 </svg>
+
                 <span class="text">Overview</span>
+
             </div>
+
+
 
             <div class="side-btn" onclick="window.api.openPage('versions.html')">
+
                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+
                     <rect x="3" y="3" width="5" height="5"></rect>
+
                     <rect x="10" y="3" width="5" height="5"></rect>
+
                     <rect x="3" y="10" width="5" height="5"></rect>
+
                     <rect x="10" y="10" width="5" height="5"></rect>
+
                 </svg>
+
                 <span class="text">Graphics Packs</span>
+
             </div>
+
+
 
             <div class="side-btn active" onclick="window.api.openPage('addons.html')">
+
                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+
                     <path d="M9 2l3 3-3 3-3-3 3-3z"></path>
+
                     <path d="M9 10l3 3-3 3-3-3 3-3z"></path>
+
                 </svg>
+
                 <span class="text">Mods</span>
+
             </div>
 
+
+
             <div class="side-btn" onclick="window.api.openPage('downloads.html')">
+
                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+
                     <path d="M9 2v9"></path>
+
                     <path d="M5 8l4 4 4-4"></path>
+
                     <path d="M4 15h10"></path>
+
                 </svg>
+
                 <span class="text">Downloads</span>
+
             </div>
+
+
+
+            <div class="side-btn" onclick="window.api.openPage('customize.html')">
+
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+
+                    <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+
+                </svg>
+
+                <span class="text">Customize</span>
+
+            </div>
+
+
 
             <div class="side-title">System</div>
 
+
+
             <div class="side-btn" onclick="window.api.openPage('performance.html')">
+
                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+
                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+
                 </svg>
+
                 <span class="text">Performance</span>
+
             </div>
+
+
 
             <div class="side-btn" onclick="window.api.openPage('settings.html')">
+
                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+
                     <circle cx="9" cy="9" r="3"></circle>
+
                     <path d="M15 10a1.5 1.5 0 0 0 .3 1.65l.05.05a1.8 1.8 0 1 1-2.55 2.55l-.05-.05A1.5 1.5 0 0 0 11 15.5V16a1.8 1.8 0 1 1-3.6 0v-.5A1.5 1.5 0 0 0 5.25 14.2l-.05.05a1.8 1.8 0 1 1-2.55-2.55l.05-.05A1.5 1.5 0 0 0 3 10V9.5A1.5 1.5 0 0 0 2.7 7.85l-.05-.05A1.8 1.8 0 1 1 5.2 5.25l.05.05A1.5 1.5 0 0 0 7.4 5h.5A1.5 1.5 0 0 0 9.55 3.7l.05-.05A1.8 1.8 0 1 1 12.15 6.2l-.05.05A1.5 1.5 0 0 0 11 7.5V9z"></path>
+
                 </svg>
+
                 <span class="text">Settings</span>
+
             </div>
 
+
+
             <!-- Logout -->
+
             <div class="side-btn" onclick="logout()" style="margin-top:auto; color:#ff4d6a;">
+
                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+
                     <polyline points="16 17 21 12 16 7"></polyline>
+
                     <line x1="21" y1="12" x2="9" y2="12"></line>
+
                 </svg>
+
                 <span class="text">Logout</span>
+
             </div>
+
+
 
         </aside>
 
+
+
         <!-- MAIN (UNCHANGED 100%) -->
+
         <main class="content no-drag">
+
+
 
             <div class="content-inner">
 
+
+
                 <!-- HEADER -->
+
                 <div class="mods-header">
+
+
 
                     <div>
 
+
+
                         <div class="page-badge">
+
                             MODS CENTER
+
                         </div>
 
+
+
                         <h1 class="title">
+
                             Mods Library
+
                         </h1>
 
+
+
                         <p class="subtitle">
+
                             Official CA Store graphics add-ons and environment mods
+
                         </p>
 
+
+
                     </div>
+
+
 
                     <button id="manageModsBtn" class="manage-main-btn">
 
+
+
                         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+
                             <path d="M12 5v14"></path>
+
                             <path d="M5 12h14"></path>
+
                         </svg>
+
+
 
                         Manage Mods
 
+
+
                     </button>
+
+
 
                 </div>
 
+
+
                 <!-- STATS -->
+
                 <div class="mods-stats">
+
+
 
                     <div class="stat-card">
 
+
+
                         <div class="stat-icon blue">
 
+
+
                             <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+
                                 <path d="M4 4h16v16H4z"></path>
+
                             </svg>
 
+
+
                         </div>
+
+
 
                         <div>
 
+
+
                             <div class="stat-value" id="modsCount">
+
                                 0
+
                             </div>
 
+
+
                             <div class="stat-label">
+
                                 Installed Mods
+
                             </div>
+
+
 
                         </div>
 
+
+
                     </div>
+
+
 
                 </div>
 
+
+
                 <!-- MODS SECTION -->
+
                 <section class="mods-section">
+
+
 
                     <div class="section-top">
 
+
+
                         <div>
 
+
+
                             <h2 class="section-title">
+
                                 Official Mods
+
                             </h2>
 
+
+
                             <p class="section-subtitle">
+
                                 Graphics enhancements and environment modifications
+
                             </p>
 
+
+
                         </div>
+
+
 
                         <div class="search-box">
 
+
+
                             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+
                                 <circle cx="7" cy="7" r="5"></circle>
+
                                 <path d="M15 15l-3-3"></path>
+
                             </svg>
+
+
 
                             <input type="text" id="modsSearch" placeholder="Search mods...">
 
+
+
                         </div>
 
+
+
                     </div>
+
+
 
                     <div id="modsPreview"></div>
 
+
+
                 </section>
 
+
+
             </div>
+
+
 
         </main>
 
+
+
     </div>
 
+
+
     <!-- POPUP -->
+
     <div id="managePopup" class="popup hidden">
+
+
 
         <div class="popup-content modern-popup">
 
+
+
             <div class="popup-header">
+
+
 
                 <div>
 
+
+
                     <div class="popup-badge">
+
                         MOD MANAGER
+
                     </div>
 
+
+
                     <h2>
+
                         Installed Mods
+
                     </h2>
 
+
+
                     <p>
+
                         Manage installed .rpf files
+
                     </p>
+
+
 
                 </div>
 
+
+
                 <button id="closeManageBtn" class="popup-close-btn">×</button>
 
+
+
             </div>
+
+
 
             <div class="popup-body">
 
+
+
                 <div id="modsList" class="mods-list modern-list"></div>
 
+
+
             </div>
+
+
 
             <div class="popup-buttons">
 
+
+
                 <button id="addModBtn" class="card-btn add">
+
                     Add Mod
+
                 </button>
+
+
 
                 <button id="deleteAllBtn" class="card-btn delete">
+
                     Delete All
+
                 </button>
 
+
+
                 <button id="saveModsBtn" class="card-btn save">
+
                     Save Changes
+
                 </button>
+
+
 
             </div>
 
+
+
         </div>
+
+
 
     </div>
 
+
+
     <!-- NOTIFICATION -->
+
     <div id="notify" class="notification"></div>
+
+
 
     <script src="addons.js"></script>
 
+
+
 </body>
+
+
 
 </html>
