@@ -168,17 +168,17 @@ contextBridge.exposeInMainWorld("api", {
 
         getPack: (packId) => ipcRenderer.invoke("ratings:getPack", packId),
 
-        submit: (packId, rating, comment, username) =>
+        submit: (packId, rating, comment, username, discordId) =>
 
-            ipcRenderer.invoke("ratings:submit", { packId, rating, comment, username }),
+            ipcRenderer.invoke("ratings:submit", { packId, rating, comment, username, discordId }),
 
-        deleteComment: (packId, commentIndex, username) =>
+        deleteComment: (commentId, discordId) =>
 
-            ipcRenderer.invoke("ratings:deleteComment", { packId, commentIndex, username }),
+            ipcRenderer.invoke("ratings:deleteComment", { commentId, discordId }),
 
-        deleteRating: (packId, ratingIndex, username) =>
+        deleteRating: (ratingId) =>
 
-            ipcRenderer.invoke("ratings:deleteRating", { packId, ratingIndex, username }),
+            ipcRenderer.invoke("ratings:deleteRating", { ratingId }),
 
     },
 

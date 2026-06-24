@@ -156,9 +156,6 @@ const LAUNCHERS = [
 
 
 
-let isFiveMRunning = false;
-
-let monitoringInterval = null;
 
 
 
@@ -193,174 +190,6 @@ function getAllFiles(dirPath, arrayOfFiles = []) {
 
 
 
-
-
-
-/* ============================================================
-
-
-
-   FIVEM PROCESS MONITORING - مراقبة عملية FiveM
-
-
-
-============================================================ */
-
-
-
-function checkFiveMProcess() {
-
-    return new Promise((resolve) => {
-
-        exec('tasklist', (err, stdout) => {
-
-            if (err) {
-
-                resolve(false);
-
-                return;
-
-            }
-
-            const isRunning = stdout.toLowerCase().includes('fivem') || 
-
-                            stdout.toLowerCase().includes('citizenfx');
-
-            resolve(isRunning);
-
-        });
-
-    });
-
-}
-
-
-
-async function startFiveMMonitoring() {
-
-    if (monitoringInterval) return;
-
-    
-
-    console.log('Starting FiveM process monitoring...');
-
-    
-
-    monitoringInterval = setInterval(async () => {
-
-        const isRunning = await checkFiveMProcess();
-
-        
-
-        if (isRunning && !isFiveMRunning) {
-
-            console.log('FiveM started - decrypting files...');
-
-            isFiveMRunning = true;
-
-            await autoDecrypt();
-
-        } else if (!isRunning && isFiveMRunning) {
-
-            console.log('FiveM closed - encrypting files...');
-
-            isFiveMRunning = false;
-
-            await autoEncrypt();
-
-        }
-
-    }, 3000);
-
-}
-
-
-
-function stopFiveMMonitoring() {
-
-    if (monitoringInterval) {
-
-        clearInterval(monitoringInterval);
-
-        monitoringInterval = null;
-
-        console.log('Stopped FiveM process monitoring');
-
-    }
-
-}
-
-
-
-async function autoDecrypt() {
-
-    try {
-
-        if (!fs.existsSync(FIVEM_PATH_FILE)) return;
-
-        
-
-        const fivemPath = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
-
-        
-
-        // إظهار جميع المجلدات (بدون تشفير)
-
-        for (const folder of ["citizen", "plugins", "mods"]) {
-
-            const dest = path.join(fivemPath, folder);
-
-            if (fs.existsSync(dest)) await unhideAll(dest);
-
-        }
-
-        
-
-        console.log('Auto-decrypt completed');
-
-    } catch (err) {
-
-        console.error('Auto-decrypt error:', err);
-
-    }
-
-}
-
-
-
-async function autoEncrypt() {
-
-    try {
-
-        if (!fs.existsSync(FIVEM_PATH_FILE)) return;
-
-        
-
-        const fivemPath = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
-
-        
-
-        // إخفاء جميع المجلدات (بدون تشفير)
-
-        for (const folder of ["citizen", "plugins", "mods"]) {
-
-            const dest = path.join(fivemPath, folder);
-
-            if (fs.existsSync(dest)) await hide(dest);
-
-        }
-
-        
-
-        console.log('Auto-encrypt completed');
-
-    } catch (err) {
-
-        console.error('Auto-encrypt error:', err);
-
-    }
-
-}
 
 
 
@@ -464,11 +293,49 @@ function isValidFiveMPath(p) {
 
 
 
-    try { return FIVEM_INDICATORS.some(f => fs.readdirSync(p).includes(f)); }
+    try {
+
+        const files = fs.readdirSync(p);
 
 
 
-    catch { return false; }
+        // يجب أن يحتوي على الأقل على 3 من المؤشرات الأساسية
+
+        const requiredIndicators = ["citizen", "plugins", "mods", "logs", "data", "bin"];
+
+
+
+        const foundIndicators = requiredIndicators.filter(f => files.includes(f));
+
+
+
+        if (foundIndicators.length < 3) return false;
+
+
+
+        // التحقق من وجود ملفات أساسية في مجلد citizen
+
+        const citizenPath = path.join(p, "citizen");
+
+        if (fs.existsSync(citizenPath)) {
+
+            const citizenFiles = fs.readdirSync(citizenPath);
+
+            // يجب أن يحتوي على common أو scripts
+
+            if (!citizenFiles.includes("common") && !citizenFiles.includes("scripts")) return false;
+
+        } else {
+
+            return false;
+
+        }
+
+
+
+        return true;
+
+    } catch { return false; }
 
 
 
@@ -607,8 +474,6 @@ function createWindow() {
 function quitApp() {
 
     app.isQuitting = true;
-
-    stopFiveMMonitoring();
 
     if (tray) {
 
@@ -910,21 +775,10 @@ app.whenReady().then(() => {
 
 
 
-    // تشغيل مراقبة FiveM
-
-    startFiveMMonitoring();
-
-
-
 });
 
 
 
-app.on('before-quit', () => {
-
-    stopFiveMMonitoring();
-
-});
 
 
 
@@ -1191,6 +1045,260 @@ const unhideAll = (p) => new Promise(r => {
 });
 
 
+
+// Function to check if a file should be excluded from hiding in plugins folder
+
+function shouldExcludeFile(fileName) {
+
+    const lowerName = fileName.toLowerCase();
+
+    // Exclude files named ReShade or starting with ReShade
+
+    if (lowerName === 'reshade' || lowerName.startsWith('reshade')) return true;
+
+    // Exclude files named QuantV or starting with QuantV
+
+    if (lowerName === 'quantv' || lowerName.startsWith('quantv')) return true;
+
+    // Exclude files named NVE or starting with NVE
+
+    if (lowerName === 'nve' || lowerName.startsWith('nve')) return true;
+
+    // Exclude specific files
+
+    if (lowerName === 'dxgi.dll') return true;
+
+    if (lowerName === 'license') return true;
+
+    return false;
+
+}
+
+
+
+// Function to hide folders with selective file hiding
+
+async function hideFolderSelective(folderPath, folderName) {
+
+    try {
+
+        if (!fs.existsSync(folderPath)) return;
+
+
+
+        // Hide the folder itself
+
+        await hide(folderPath);
+
+
+
+        if (folderName === 'citizen') {
+
+            // For citizen: hide the folder only, keep contents as they are
+
+            return;
+
+        }
+
+
+
+        if (folderName === 'mods') {
+
+            // For mods: hide the folder and everything inside
+
+            await hide(folderPath + '\\*');
+
+            return;
+
+        }
+
+
+
+        if (folderName === 'plugins') {
+
+            // For plugins: hide folder and selectively hide files inside
+
+            const presetPath = path.join(folderPath, 'preset');
+
+            const reshadeShadersPath = path.join(folderPath, 'reshade-shaders');
+
+
+
+            // Recursively hide files in plugins folder
+
+            await hideFilesRecursive(folderPath, presetPath, reshadeShadersPath);
+
+
+
+            // Handle reshade-shaders folder - hide half of items in Shaders and Textures
+
+            if (fs.existsSync(reshadeShadersPath)) {
+
+                const shadersPath = path.join(reshadeShadersPath, 'Shaders');
+
+                const texturesPath = path.join(reshadeShadersPath, 'Textures');
+
+
+
+                if (fs.existsSync(shadersPath)) {
+
+                    await hideHalfItems(shadersPath);
+
+                }
+
+                if (fs.existsSync(texturesPath)) {
+
+                    await hideHalfItems(texturesPath);
+
+                }
+
+            }
+
+        }
+
+    } catch (err) {
+
+        console.error(`Error hiding folder ${folderName}:`, err);
+
+    }
+
+}
+
+
+
+// Recursive function to hide files with exceptions
+
+async function hideFilesRecursive(dirPath, presetPath = null, reshadeShadersPath = null) {
+
+    try {
+
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+
+
+        for (const entry of entries) {
+
+            const fullPath = path.join(dirPath, entry.name);
+
+
+
+            if (entry.isDirectory()) {
+
+                // Skip reshade-shaders folder as it's handled separately
+
+                if (reshadeShadersPath && fullPath === reshadeShadersPath) {
+
+                    continue;
+
+                }
+
+                // Recursively process subdirectories
+
+                await hideFilesRecursive(fullPath, presetPath, reshadeShadersPath);
+
+            } else {
+
+                // Check if this is the preset folder
+
+                const isPresetFolder = presetPath && dirPath === presetPath;
+
+
+
+                if (isPresetFolder) {
+
+                    // In preset folder, we'll handle separately (hide first half)
+
+                    continue;
+
+                }
+
+
+
+                // Check if file should be excluded
+
+                if (!shouldExcludeFile(entry.name)) {
+
+                    await hide(fullPath);
+
+                }
+
+            }
+
+        }
+
+
+
+        // Handle preset folder separately - hide first half of files
+
+        if (presetPath && fs.existsSync(presetPath)) {
+
+            const presetFiles = fs.readdirSync(presetPath, { withFileTypes: true })
+
+                .filter(e => !e.isDirectory())
+
+                .map(e => e.name);
+
+
+
+            const halfIndex = Math.ceil(presetFiles.length / 2);
+
+            const filesToHide = presetFiles.slice(0, halfIndex);
+
+
+
+            for (const fileName of filesToHide) {
+
+                const filePath = path.join(presetPath, fileName);
+
+                await hide(filePath);
+
+            }
+
+        }
+
+    } catch (err) {
+
+        console.error('Error in hideFilesRecursive:', err);
+
+    }
+
+}
+
+
+
+// Function to hide half of items (files and folders) in a directory
+
+async function hideHalfItems(dirPath) {
+
+    try {
+
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+        const allItems = entries.map(e => e.name);
+
+
+
+        const halfIndex = Math.ceil(allItems.length / 2);
+
+        const itemsToHide = allItems.slice(0, halfIndex);
+
+
+
+        for (const itemName of itemsToHide) {
+
+            const itemPath = path.join(dirPath, itemName);
+
+            await hide(itemPath);
+
+        }
+
+    } catch (err) {
+
+        console.error('Error in hideHalfItems:', err);
+
+    }
+
+}
 
 
 
@@ -1992,13 +2100,13 @@ ipcMain.handle("install:run", async (e, { zipPath, product }) => {
 
 
 
-        // إخفاء جميع المجلدات (بدون تشفير)
+        // إخفاء المجلدات مع الإخفاء الانتقائي للملفات
 
         for (const folder of ["citizen", "plugins", "mods"]) {
 
             const dest = path.join(fivemPath, folder);
 
-            if (fs.existsSync(dest)) await hide(dest);
+            if (fs.existsSync(dest)) await hideFolderSelective(dest, folder);
 
         }
 
@@ -5064,7 +5172,7 @@ ipcMain.handle("performance:restoreAll", async () => {
 
 
 
-   RATINGS & COMMENTS
+   RATINGS & COMMENTS - Online System
 
 
 
@@ -5072,319 +5180,89 @@ ipcMain.handle("performance:restoreAll", async () => {
 
 
 
-const RATINGS_PATH = path.join(app.getPath("userData"), "ratings.json");
+// Helper function to make HTTP requests to backend
 
+async function fetchBackend(url, options = {}) {
 
+    try {
 
-// Admin Discord IDs who can delete ratings
+        const response = await fetch(url, options);
 
-const ADMIN_DISCORD_IDS = ["1336347875206234292"];
+        const data = await response.json();
 
+        return data;
 
+    } catch (err) {
 
-function isAdmin(discordId) {
+        console.error("Backend fetch error:", err);
 
-    return ADMIN_DISCORD_IDS.includes(discordId);
+        return { success: false, message: "خطأ في الاتصال بالسيرفر" };
+
+    }
 
 }
 
 
 
-function loadRatings() {
+ipcMain.handle("ratings:get", async () => {
 
-    try {
-
-        if (fs.existsSync(RATINGS_PATH)) {
-
-            return JSON.parse(fs.readFileSync(RATINGS_PATH, "utf8"));
-
-        }
-
-    } catch {}
-
-    return {};
-
-}
-
-
-
-function saveRatings(ratings) {
-
-    try {
-
-        fs.writeFileSync(RATINGS_PATH, JSON.stringify(ratings, null, 2), "utf8");
-
-        return true;
-
-    } catch {}
-
-    return false;
-
-}
-
-
-
-ipcMain.handle("ratings:get", () => {
-
-    return { success: true, ratings: loadRatings() };
+    return await fetchBackend(`${BACKEND_URL}/api/ratings`);
 
 });
 
 
 
-ipcMain.handle("ratings:submit", async (e, { packId, rating, comment, username }) => {
+ipcMain.handle("ratings:submit", async (e, { packId, rating, comment, username, discordId }) => {
 
-    try {
+    return await fetchBackend(`${BACKEND_URL}/api/ratings`, {
 
-        const ratings = loadRatings();
+        method: "POST",
 
+        headers: { "Content-Type": "application/json" },
 
+        body: JSON.stringify({ packId, rating, comment, username, discordId })
 
-        if (!ratings[packId]) {
-
-            ratings[packId] = { ratings: [], comments: [], averageRating: 0, totalRatings: 0 };
-
-        }
-
-
-
-        const packData = ratings[packId];
-
-
-
-        // Add rating
-
-        packData.ratings.push({
-
-            rating,
-
-            username: username || "Anonymous",
-
-            timestamp: Date.now()
-
-        });
-
-
-
-        // Add comment if provided (with rating included)
-
-        if (comment && comment.trim()) {
-
-            packData.comments.push({
-
-                comment: comment.trim(),
-
-                rating: rating,
-
-                username: username || "Anonymous",
-
-                timestamp: Date.now()
-
-            });
-
-        }
-
-
-
-        // Calculate average
-
-        const sum = packData.ratings.reduce((acc, r) => acc + r.rating, 0);
-
-        packData.averageRating = (sum / packData.ratings.length).toFixed(1);
-
-        packData.totalRatings = packData.ratings.length;
-
-
-
-        saveRatings(ratings);
-
-
-
-        return { success: true, averageRating: packData.averageRating, totalRatings: packData.totalRatings };
-
-    } catch (err) {
-
-        console.error("Rating error:", err);
-
-        return { success: false, message: "Failed to save rating" };
-
-    }
+    });
 
 });
 
 
 
-ipcMain.handle("ratings:getPack", (e, packId) => {
+ipcMain.handle("ratings:getPack", async (e, packId) => {
 
-    try {
-
-        const ratings = loadRatings();
-
-        const packData = ratings[packId] || { ratings: [], comments: [], averageRating: 0, totalRatings: 0 };
-
-        return { success: true, ...packData };
-
-    } catch {
-
-        return { success: false };
-
-    }
+    return await fetchBackend(`${BACKEND_URL}/api/ratings/${packId}`);
 
 });
 
 
 
-ipcMain.handle("ratings:deleteComment", async (e, { packId, commentIndex, username }) => {
+ipcMain.handle("ratings:deleteComment", async (e, { commentId, discordId }) => {
 
-    try {
+    return await fetchBackend(`${BACKEND_URL}/api/ratings/comment`, {
 
-        // Check if user is admin
+        method: "DELETE",
 
-        if (!isAdmin(username)) {
+        headers: { "Content-Type": "application/json" },
 
-            return { success: false, message: "Unauthorized: Only admins can delete comments" };
+        body: JSON.stringify({ commentId, discordId })
 
-        }
-
-
-
-        const ratings = loadRatings();
-
-        if (!ratings[packId] || !ratings[packId].comments) {
-
-            return { success: false, message: "Comment not found" };
-
-        }
-
-
-
-        const packData = ratings[packId];
-
-        const comment = packData.comments[commentIndex];
-
-
-
-        if (!comment) {
-
-            return { success: false, message: "Comment not found" };
-
-        }
-
-
-
-        // Remove comment
-
-        packData.comments.splice(commentIndex, 1);
-
-
-
-        // Recalculate average rating
-
-        if (packData.ratings.length > 0) {
-
-            const sum = packData.ratings.reduce((acc, r) => acc + r.rating, 0);
-
-            packData.averageRating = (sum / packData.ratings.length).toFixed(1);
-
-        } else {
-
-            packData.averageRating = 0;
-
-        }
-
-
-
-        saveRatings(ratings);
-
-        return { success: true, message: "Comment deleted successfully" };
-
-    } catch (err) {
-
-        console.error("Delete comment error:", err);
-
-        return { success: false, message: "Failed to delete comment" };
-
-    }
+    });
 
 });
 
 
 
-ipcMain.handle("ratings:deleteRating", async (e, { packId, ratingIndex, username }) => {
+ipcMain.handle("ratings:deleteRating", async (e, { ratingId }) => {
 
-    try {
+    return await fetchBackend(`${BACKEND_URL}/api/ratings/rating`, {
 
-        // Check if user is admin
+        method: "DELETE",
 
-        if (!isAdmin(username)) {
+        headers: { "Content-Type": "application/json" },
 
-            return { success: false, message: "Unauthorized: Only admins can delete ratings" };
+        body: JSON.stringify({ ratingId })
 
-        }
-
-
-
-        const ratings = loadRatings();
-
-        if (!ratings[packId] || !ratings[packId].ratings) {
-
-            return { success: false, message: "Rating not found" };
-
-        }
-
-
-
-        const packData = ratings[packId];
-
-        const rating = packData.ratings[ratingIndex];
-
-
-
-        if (!rating) {
-
-            return { success: false, message: "Rating not found" };
-
-        }
-
-
-
-        // Remove rating
-
-        packData.ratings.splice(ratingIndex, 1);
-
-
-
-        // Recalculate average rating
-
-        if (packData.ratings.length > 0) {
-
-            const sum = packData.ratings.reduce((acc, r) => acc + r.rating, 0);
-
-            packData.averageRating = (sum / packData.ratings.length).toFixed(1);
-
-        } else {
-
-            packData.averageRating = 0;
-
-        }
-
-
-
-        packData.totalRatings = packData.ratings.length;
-
-
-
-        saveRatings(ratings);
-
-        return { success: true, message: "Rating deleted successfully" };
-
-    } catch (err) {
-
-        console.error("Delete rating error:", err);
-
-        return { success: false, message: "Failed to delete rating" };
-
-    }
+    });
 
 });
 

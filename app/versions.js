@@ -22,6 +22,11 @@ function isAdmin() {
     return currentDiscordId === ADMIN_DISCORD_ID;
 }
 
+function canDeleteComment(commentDiscordId) {
+    // Allow deletion if user is admin or if it's their own comment
+    return isAdmin() || commentDiscordId === currentDiscordId;
+}
+
 /* ── FETCH PACKS FROM SERVER ── */
 async function fetchPacksFromServer() {
     try {
@@ -115,15 +120,17 @@ function openRatingPopup(packId) {
 async function loadPackComments(packId) {
     const r = await window.api.ratings.getPack(packId);
     const commentsList = document.getElementById("commentsList");
+    const ratingsList = document.getElementById("ratingsList");
 
+    // عرض التعليقات
     if (r.success && r.comments && r.comments.length > 0) {
-        commentsList.innerHTML = r.comments.map((c, index) => `
+        commentsList.innerHTML = r.comments.map((c) => `
             <div class="comment-item">
                 <div class="comment-header">
                     <div class="comment-author">${c.username}</div>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <div class="comment-date">${new Date(c.timestamp).toLocaleDateString('ar-SA')}</div>
-                        ${isAdmin() ? `<button class="delete-comment-btn" onclick="deleteComment('${packId}', ${index})">حذف</button>` : ''}
+                        <div class="comment-date">${new Date(c.created_at).toLocaleDateString('ar-SA')}</div>
+                        ${canDeleteComment(c.discord_id) ? `<button class="delete-comment-btn" onclick="deleteComment('${packId}', ${c.id})">حذف</button>` : ''}
                     </div>
                 </div>
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
@@ -136,15 +143,51 @@ async function loadPackComments(packId) {
     } else {
         commentsList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);font-size:13px;padding:20px;">لا توجد تعليقات بعد</div>';
     }
+
+    // عرض التقييمات (للأدمن فقط)
+    if (isAdmin() && r.success && r.ratings && r.ratings.length > 0) {
+        ratingsList.innerHTML = r.ratings.map((rating) => `
+            <div class="comment-item">
+                <div class="comment-header">
+                    <div class="comment-author">${rating.username}</div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div class="comment-date">${new Date(rating.created_at).toLocaleDateString('ar-SA')}</div>
+                        <button class="delete-comment-btn" onclick="deleteRating('${packId}', ${rating.id})">حذف التقييم</button>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <div class="rating-stars" style="transform:scale(0.8);transform-origin:left;">${renderStars(rating.rating)}</div>
+                    <span style="font-size:12px;color:rgba(255,255,255,0.4);">${rating.rating}/5</span>
+                </div>
+            </div>
+        `).join('');
+    } else if (isAdmin()) {
+        ratingsList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);font-size:13px;padding:20px;">لا توجد تقييمات بعد</div>';
+    }
 }
 
-async function deleteComment(packId, commentIndex) {
+async function deleteComment(packId, commentId) {
     if (!confirm("هل أنت متأكد من حذف هذا التعليق؟")) return;
 
-    const r = await window.api.ratings.deleteComment(packId, commentIndex, currentDiscordId);
+    const r = await window.api.ratings.deleteComment(commentId, currentDiscordId);
     if (r.success) {
         showNotify("✅ تم حذف التعليق بنجاح");
         await loadRatings();
+        loadPacks();
+        loadPackComments(packId);
+    } else {
+        showNotify(`❌ ${r.message}`, "error");
+    }
+}
+
+async function deleteRating(packId, ratingId) {
+    if (!confirm("هل أنت متأكد من حذف هذا التقييم؟")) return;
+
+    const r = await window.api.ratings.deleteRating(ratingId);
+    if (r.success) {
+        showNotify("✅ تم حذف التقييم بنجاح");
+        await loadRatings();
+        loadPacks();
         loadPackComments(packId);
     } else {
         showNotify(`❌ ${r.message}`, "error");
@@ -172,8 +215,9 @@ async function submitRating() {
     const comment = document.getElementById("ratingComment").value;
     const authResult = await window.api.auth.check();
     const username = authResult.success ? (authResult.username || "Anonymous") : "Anonymous";
+    const discordId = authResult.success ? authResult.discordId : null;
 
-    const r = await window.api.ratings.submit(selectedPack.id, currentRating, comment, username);
+    const r = await window.api.ratings.submit(selectedPack.id, currentRating, comment, username, discordId);
     
     if (r.success) {
         showNotify("✅ تم إرسال تقييمك بنجاح!");
