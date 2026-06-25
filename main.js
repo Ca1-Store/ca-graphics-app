@@ -231,122 +231,74 @@ function send(channel, data) {
 
 function detectFiveMPath() {
 
-
-
     const candidates = [
-
-
-
         path.join(process.env.LOCALAPPDATA || "", "FiveM", "FiveM.app"),
-
-
-
         path.join(process.env.LOCALAPPDATA || "", "FiveM"),
-
-
-
         path.join(process.env.APPDATA || "", "CitizenFX"),
-
-
-
+        path.join(process.env.PROGRAMFILES || "", "FiveM"),
+        path.join(process.env["PROGRAMFILES(X86)"] || process.env.PROGRAMFILES || "", "FiveM")
     ];
 
-
-
     for (const p of candidates) {
-
-
-
         try {
+            if (fs.existsSync(p) && isValidFiveMPath(p)) return p;
 
+            if (fs.existsSync(p)) {
+                const entries = fs.readdirSync(p, { withFileTypes: true })
+                    .filter(e => e.isDirectory())
+                    .map(e => path.join(p, e.name));
 
-
-            if (fs.existsSync(p) && FIVEM_INDICATORS.some(f => fs.readdirSync(p).includes(f)))
-
-
-
-                return p;
-
-
-
+                for (const sub of entries) {
+                    try {
+                        if (isValidFiveMPath(sub)) return sub;
+                    } catch {}
+                }
+            }
         } catch {}
-
-
-
     }
-
-
 
     return null;
 
-
-
 }
-
-
-
-
-
-
-
 function isValidFiveMPath(p) {
 
-
-
     try {
+        if (!p || typeof p !== "string") return false;
+        if (!fs.existsSync(p) || !fs.statSync(p).isDirectory()) return false;
 
-        const files = fs.readdirSync(p);
+        const files = fs.readdirSync(p).map(name => name.toLowerCase());
+        const directIndicators = [
+            "citizenfx.ini",
+            "fivem.exe",
+            "fivem.app"
+        ];
 
-
-
-        // يجب أن يحتوي على الأقل على 3 من المؤشرات الأساسية
-
-        const requiredIndicators = ["citizen", "plugins", "mods", "logs", "data", "bin"];
-
-
-
-        const foundIndicators = requiredIndicators.filter(f => files.includes(f));
-
-
-
-        if (foundIndicators.length < 3) return false;
-
-
-
-        // التحقق من وجود ملفات أساسية في مجلد citizen
-
-        const citizenPath = path.join(p, "citizen");
-
-        if (fs.existsSync(citizenPath)) {
-
-            const citizenFiles = fs.readdirSync(citizenPath);
-
-            // يجب أن يحتوي على common أو scripts
-
-            if (!citizenFiles.includes("common") && !citizenFiles.includes("scripts")) return false;
-
-        } else {
-
-            return false;
-
+        if (directIndicators.some(ind => files.includes(ind))) {
+            return true;
         }
 
+        const coreFolders = ["citizen", "plugins", "mods", "data", "logs", "bin"];
+        const found = coreFolders.filter(folder => files.includes(folder));
+        if (found.length >= 2) return true;
 
+        if (files.includes("citizen")) {
+            const citizenPath = path.join(p, "citizen");
+            if (fs.existsSync(citizenPath) && fs.statSync(citizenPath).isDirectory()) {
+                const citizenFiles = fs.readdirSync(citizenPath).map(name => name.toLowerCase());
+                if (citizenFiles.includes("common") || citizenFiles.includes("scripts")) {
+                    return true;
+                }
+            }
+        }
 
-        return true;
-
-    } catch { return false; }
-
-
-
+        return false;
+    } catch {
+        return false;
+    }
 }
 
 
-
-
-
-
-
+/* ============================================================
 /* ============================================================
 
 
