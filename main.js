@@ -1180,33 +1180,7 @@ async function hideFilesRecursive(dirPath, presetPath = null, reshadeShadersPath
 
 
 
-        // Handle preset folder separately - hide first half of files
-
-        if (presetPath && fs.existsSync(presetPath)) {
-
-            const presetFiles = fs.readdirSync(presetPath, { withFileTypes: true })
-
-                .filter(e => !e.isDirectory())
-
-                .map(e => e.name);
-
-
-
-            const halfIndex = Math.ceil(presetFiles.length / 2);
-
-            const filesToHide = presetFiles.slice(0, halfIndex);
-
-
-
-            for (const fileName of filesToHide) {
-
-                const filePath = path.join(presetPath, fileName);
-
-                await hide(filePath);
-
-            }
-
-        }
+        // Preset folder is kept visible - no files are hidden in preset
 
     } catch (err) {
 
