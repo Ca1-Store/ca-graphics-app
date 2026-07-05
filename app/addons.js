@@ -1,19 +1,36 @@
-const modsPreview = document.getElementById("modsPreview");
-const manageBtn = document.getElementById("manageModsBtn");
-const popup = document.getElementById("managePopup");
-const modsList = document.getElementById("modsList");
-const notify = document.getElementById("notify");
-const modsCount = document.getElementById("modsCount");
+/* ============================================================
+   CA STORE — MODS v2
+============================================================ */
+const $ = (id) => document.getElementById(id);
+const $$ = (sel) => document.querySelectorAll(sel);
 
-let currentMods = [];  // أسماء الملفات فقط (مثل "European_Roads.rpf")
-let pendingMods = [];  // نفس الشيء - أسماء أو paths كاملة للجديدة
+const modsPreview = $("modsPreview");
+const manageBtn = $("manageModsBtn");
+const popup = $("managePopup");
+const modsList = $("modsList");
+const notify = $("notify");
+const modsCount = $("modsCount");
+const totalMods = $("totalMods");
+const sectionsCount = $("sectionsCount");
+const manageCount = $("manageCount");
+const manageSaveStatus = $("manageSaveStatus");
+const mdTabs = $("mdTabs");
+const mdSkeleton = $("mdSkeleton");
+const mdEmpty = $("mdEmpty");
+
+let currentMods = [];
+let pendingMods = [];
 let userPlans = [];
 let sections = [];
 let allMods = [];
+let activeSection = "all";
+let searchQuery = "";
+let isDirty = false;
+
 const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
 
 /* ============================================================
-   AUTH CHECK
+   AUTH
 ============================================================ */
 async function checkAuth() {
     const result = await window.api.auth.check();
@@ -26,7 +43,7 @@ async function checkAuth() {
 }
 
 /* ============================================================
-   FETCH MODS FROM SERVER
+   FETCH MODS
 ============================================================ */
 async function fetchModsFromServer() {
     try {
@@ -50,388 +67,153 @@ async function fetchModsFromServer() {
 function showNotify(msg, type = "success") {
     notify.textContent = msg;
     notify.className = `notification show ${type}`;
-    clearTimeout(window.notifyTimeout);
-    window.notifyTimeout = setTimeout(() => notify.classList.remove("show"), 2200);
+    clearTimeout(window._notifyTO);
+    window._notifyTO = setTimeout(() => notify.classList.remove("show"), 2400);
 }
 
 /* ============================================================
-   UPDATE COUNT
+   UPDATE STATS
 ============================================================ */
-function updateModsCount() {
-    if (!modsCount) return;
-    modsCount.textContent = allMods.filter(m => currentMods.includes(m.file)).length;
+function updateStats() {
+    if (modsCount) modsCount.textContent = allMods.filter(m => currentMods.includes(m.file)).length;
+    if (totalMods) totalMods.textContent = allMods.length;
+    if (sectionsCount) sectionsCount.textContent = sections.length;
+}
+
+/* ============================================================
+   TABS
+============================================================ */
+function renderTabs() {
+    mdTabs.innerHTML = `<button class="md-tab active" data-section="all">All</button>`;
+    sections.forEach(s => {
+        const btn = document.createElement("button");
+        btn.className = "md-tab";
+        btn.dataset.section = s.title;
+        btn.textContent = s.title;
+        mdTabs.appendChild(btn);
+    });
+    mdTabs.addEventListener("click", e => {
+        const tab = e.target.closest(".md-tab");
+        if (!tab) return;
+        $$(".md-tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        activeSection = tab.dataset.section;
+        renderSections();
+    });
 }
 
 /* ============================================================
    RENDER SECTIONS
 ============================================================ */
 function renderSections() {
-
+    mdSkeleton.classList.add("hidden");
     modsPreview.innerHTML = "";
 
-    sections.forEach(section => {
+    const filteredSections = activeSection === "all"
+        ? sections
+        : sections.filter(s => s.title === activeSection);
 
+    let totalCards = 0;
+
+    filteredSections.forEach(section => {
         const unlocked = section.requiredPlans.some(p => userPlans.includes(p));
 
-        const sectionEl = document.createElement("div");
+        let modsToShow = section.mods;
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            modsToShow = section.mods.filter(m =>
+                m.name.toLowerCase().includes(q) ||
+                (m.description || "").toLowerCase().includes(q)
+            );
+        }
+        if (!modsToShow.length) return;
 
-        sectionEl.style = `
-            margin-bottom:42px;
-            position:relative;
-        `;
+        totalCards += modsToShow.length;
 
-        sectionEl.innerHTML = `
+        const el = document.createElement("div");
+        el.className = "md-block";
 
-            <!-- SECTION HEADER -->
-            <div style="
-                display:flex;
-                align-items:center;
-                justify-content:space-between;
-                margin-bottom:22px;
-                gap:20px;
-                flex-wrap:wrap;
-            ">
-
-                <div style="
-                    display:flex;
-                    align-items:center;
-                    gap:16px;
-                ">
-
-                    <div style="
-                        width:54px;
-                        height:54px;
-                        border-radius:18px;
-                        background:${unlocked
-                            ? 'linear-gradient(135deg, rgba(79,140,255,.25), rgba(0,255,174,.12))'
-                            : 'rgba(255,255,255,.05)'
-                        };
-                        border:${unlocked
-                            ? '1px solid rgba(79,140,255,.25)'
-                            : '1px solid rgba(255,255,255,.04)'
-                        };
-                        display:flex;
-                        align-items:center;
-                        justify-content:center;
-                        color:${unlocked ? '#9fc0ff' : '#666'};
-                        backdrop-filter:blur(10px);
-                        box-shadow:${unlocked
-                            ? '0 0 30px rgba(79,140,255,.12)'
-                            : 'none'
-                        };
-                    ">
-                        ${section.icon}
+        el.innerHTML = `
+            <div class="md-block-header">
+                <div class="md-block-left">
+                    <div class="md-block-icon" style="--md-block-accent: ${unlocked ? '#4f8cff' : '#666'}">
+                        ${section.icon || `<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"></rect></svg>`}
                     </div>
-
                     <div>
-
-                        <div style="
-                            display:flex;
-                            align-items:center;
-                            gap:10px;
-                            flex-wrap:wrap;
-                        ">
-
-                            <h2 style="
-                                margin:0;
-                                font-size:24px;
-                                font-weight:800;
-                                color:${unlocked ? '#fff' : '#666'};
-                                letter-spacing:-0.02em;
-                            ">
-                                ${section.title}
-                            </h2>
-
-                            ${!unlocked ? `
-                                <div style="
-                                    padding:6px 12px;
-                                    border-radius:999px;
-                                    background:rgba(255,77,109,.12);
-                                    border:1px solid rgba(255,77,109,.18);
-                                    color:#ff8ba2;
-                                    font-size:11px;
-                                    font-weight:700;
-                                    letter-spacing:.08em;
-                                ">
-                                    LOCKED
-                                </div>
-                            ` : `
-                                <div style="
-                                    padding:6px 12px;
-                                    border-radius:999px;
-                                    background:rgba(0,255,174,.12);
-                                    border:1px solid rgba(0,255,174,.12);
-                                    color:#7dffd2;
-                                    font-size:11px;
-                                    font-weight:700;
-                                    letter-spacing:.08em;
-                                ">
-                                    UNLOCKED
-                                </div>
-                            `}
-
+                        <div class="md-block-title-row">
+                            <h2 class="md-block-title">${section.title}</h2>
+                            <span class="md-block-badge ${unlocked ? 'md-badge-unlocked' : 'md-badge-locked'}">${unlocked ? 'UNLOCKED' : 'LOCKED'}</span>
                         </div>
-
-                        <div style="
-                            font-size:13px;
-                            color:#7d8496;
-                            margin-top:6px;
-                            font-weight:500;
-                        ">
-                            ${section.subtitle}
-                        </div>
-
+                        <p class="md-block-sub">${section.subtitle}</p>
                     </div>
-
                 </div>
-
-                <div style="
-                    color:#5e6678;
-                    font-size:13px;
-                    font-weight:600;
-                    padding:10px 16px;
-                    border-radius:14px;
-                    background:rgba(255,255,255,.03);
-                    border:1px solid rgba(255,255,255,.04);
-                ">
-                    ${section.mods.length} Mods
-                </div>
-
+                <div class="md-block-count">${modsToShow.length} Mod${modsToShow.length !== 1 ? 's' : ''}</div>
             </div>
-
-            <!-- GRID -->
-            <div class="section-grid" style="
-                display:grid;
-                grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
-                gap:22px;
-            "></div>
-
+            <div class="md-grid"></div>
         `;
 
-        const grid = sectionEl.querySelector(".section-grid");
+        const grid = el.querySelector(".md-grid");
 
-        section.mods.forEach(mod => {
-
+        modsToShow.forEach((mod, idx) => {
             const installed = currentMods.includes(mod.file);
-
             const card = document.createElement("div");
-
-            card.className = "pack-card";
-
-            card.style = `
-                position:relative;
-                overflow:hidden;
-                border-radius:26px;
-                background:linear-gradient(
-                    180deg,
-                    rgba(255,255,255,.05),
-                    rgba(255,255,255,.025)
-                );
-                border:1px solid rgba(255,255,255,.06);
-                backdrop-filter:blur(18px);
-                transition:.28s ease;
-                cursor:${unlocked ? 'pointer' : 'not-allowed'};
-                opacity:${unlocked ? '1' : '.65'};
-                box-shadow:0 10px 35px rgba(0,0,0,.35);
-            `;
-
-            card.onmouseenter = () => {
-                if (!unlocked) return;
-
-                card.style.transform = "translateY(-6px)";
-                card.style.borderColor = "rgba(79,140,255,.22)";
-                card.style.boxShadow = "0 18px 45px rgba(79,140,255,.12)";
-            };
-
-            card.onmouseleave = () => {
-                card.style.transform = "translateY(0px)";
-                card.style.borderColor = "rgba(255,255,255,.06)";
-                card.style.boxShadow = "0 10px 35px rgba(0,0,0,.35)";
-            };
+            card.className = `md-card ${!unlocked ? 'md-card-locked' : ''}`;
+            card.style.setProperty("--md-card-delay", `${idx * 0.04}s`);
 
             card.innerHTML = `
-
-                <!-- IMAGE -->
-                <div style="
-                    position:relative;
-                    overflow:hidden;
-                    height:180px;
-                ">
-
-                    <img src="${mod.img}" style="
-                        width:100%;
-                        height:100%;
-                        object-fit:cover;
-                        display:block;
-                    ">
-
-                    <div style="
-                        position:absolute;
-                        inset:0;
-                        background:linear-gradient(
-                            to top,
-                            rgba(8,10,16,.95),
-                            rgba(8,10,16,.15)
-                        );
-                    "></div>
-
-                    ${installed ? `
-                        <div style="
-                            position:absolute;
-                            top:14px;
-                            right:14px;
-                            padding:8px 12px;
-                            border-radius:999px;
-                            background:rgba(0,255,174,.15);
-                            border:1px solid rgba(0,255,174,.2);
-                            color:#7dffd2;
-                            font-size:11px;
-                            font-weight:700;
-                            backdrop-filter:blur(8px);
-                        ">
-                            INSTALLED
-                        </div>
-                    ` : ""}
-
+                <div class="md-card-img-wrap">
+                    <img src="${mod.img}" alt="${mod.name}" loading="lazy">
+                    <div class="md-card-img-overlay"></div>
+                    ${installed ? '<div class="md-card-installed-badge">INSTALLED</div>' : ''}
                     ${!unlocked ? `
-                        <div style="
-                            position:absolute;
-                            inset:0;
-                            background:rgba(8,10,16,.72);
-                            display:flex;
-                            flex-direction:column;
-                            align-items:center;
-                            justify-content:center;
-                            gap:14px;
-                            color:#fff;
-                            backdrop-filter:blur(5px);
-                        ">
-
-                            <div style="
-                                width:62px;
-                                height:62px;
-                                border-radius:18px;
-                                background:rgba(255,255,255,.08);
-                                display:flex;
-                                align-items:center;
-                                justify-content:center;
-                            ">
-                                <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <div class="md-card-lock-overlay">
+                            <div class="md-card-lock-icon">
+                                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8">
                                     <rect x="6" y="12" width="16" height="10" rx="2"></rect>
                                     <path d="M10 12v-3a4 4 0 0 1 8 0v3"></path>
                                 </svg>
                             </div>
-
-                            <div style="
-                                text-align:center;
-                                font-size:13px;
-                                color:#d2d6df;
-                                line-height:1.7;
-                                padding:0 18px;
-                            ">
-                                Requires:
-                                <br>
-                                <span style="
-                                    color:#fff;
-                                    font-weight:700;
-                                ">
-                                    ${section.requiredPlans.join(" / ")}
-                                </span>
+                            <div class="md-card-lock-text">
+                                Requires <strong>${section.requiredPlans.join(" / ")}</strong>
                             </div>
-
                         </div>
-                    ` : ""}
-
+                    ` : ''}
                 </div>
-
-                <!-- BODY -->
-                <div style="
-                    padding:20px;
-                ">
-
-                    <div style="
-                        display:flex;
-                        align-items:flex-start;
-                        justify-content:space-between;
-                        gap:10px;
-                        margin-bottom:14px;
-                    ">
-
-                        <div>
-
-                            <div style="
-                                font-size:17px;
-                                font-weight:800;
-                                color:#fff;
-                                line-height:1.4;
-                            ">
-                                ${mod.name}
-                            </div>
-
-                            <div style="
-                                margin-top:8px;
-                                color:#7b8497;
-                                font-size:13px;
-                                line-height:1.7;
-                            ">
-                                High quality graphics enhancement package for FiveM.
-                            </div>
-
-                        </div>
-
-                    </div>
-
+                <div class="md-card-body">
+                    <h3 class="md-card-name">${mod.name}</h3>
+                    <p class="md-card-desc">${mod.description || 'High quality graphics enhancement for FiveM.'}</p>
                     <button
-                        class="pack-btn"
-                        ${unlocked
-                            ? `onclick="handleMod('${mod.file}', '${mod.url}', '${mod.name}')"`
-                            : "disabled"
-                        }
-                        style="
-                            width:100%;
-                            height:48px;
-                            border:none;
-                            border-radius:16px;
-                            font-size:14px;
-                            font-weight:700;
-                            transition:.25s ease;
-                            cursor:${unlocked ? 'pointer' : 'not-allowed'};
-                            background:${unlocked
-                                ? 'linear-gradient(135deg,#4f8cff,#6ea8ff)'
-                                : 'rgba(255,255,255,.05)'
-                            };
-                            color:${unlocked ? '#fff' : '#777'};
-                            box-shadow:${unlocked
-                                ? '0 10px 25px rgba(79,140,255,.18)'
-                                : 'none'
-                            };
-                        "
+                        class="md-card-btn ${unlocked ? (installed ? 'md-btn-reinstall' : 'md-btn-install') : 'md-btn-locked'}"
+                        ${unlocked ? `data-file="${mod.file}" data-url="${mod.url}" data-name="${mod.name}"` : 'disabled'}
                     >
-                        ${unlocked
-                            ? installed
-                                ? "Reinstall Mod"
-                                : "Install Mod"
-                            : "Locked"
-                        }
+                        ${unlocked ? (installed ? 'Reinstall' : 'Install Mod') : 'Locked'}
                     </button>
-
                 </div>
-
             `;
 
-            grid.appendChild(card);
+            if (unlocked) {
+                card.querySelector(".md-card-btn").addEventListener("click", () => handleInstall(mod.file, mod.url, mod.name));
+            }
 
+            grid.appendChild(card);
         });
 
-        modsPreview.appendChild(sectionEl);
-
+        modsPreview.appendChild(el);
     });
 
+    if (!totalCards && searchQuery) {
+        mdEmpty.classList.remove("hidden");
+    } else {
+        mdEmpty.classList.add("hidden");
+    }
+
+    updateStats();
 }
+
 /* ============================================================
    HANDLE INSTALL
 ============================================================ */
-async function handleMod(file, url, name) {
+function handleInstall(file, url, name) {
     localStorage.setItem("pending_download", JSON.stringify({
         url, name,
         productId: file,
@@ -444,29 +226,39 @@ async function handleMod(file, url, name) {
 /* ============================================================
    OPEN / CLOSE POPUP
 ============================================================ */
-window.openModsPopup = async () => {
+async function openModsPopup() {
     popup.classList.remove("hidden");
+    popup.classList.add("popup-opening");
     await syncMods();
+    isDirty = false;
+    manageSaveStatus.textContent = "No unsaved changes";
+}
+
+manageBtn.onclick = openModsPopup;
+
+$("closeManageBtn").onclick = () => {
+    popup.classList.add("hidden");
+    popup.classList.remove("popup-opening");
 };
 
-if (manageBtn) manageBtn.onclick = window.openModsPopup;
-
-const closeBtn = document.getElementById("closeManageBtn");
-if (closeBtn) closeBtn.onclick = () => popup.classList.add("hidden");
+popup.addEventListener("click", e => {
+    if (e.target === popup) {
+        popup.classList.add("hidden");
+        popup.classList.remove("popup-opening");
+    }
+});
 
 /* ============================================================
-   SYNC MODS - يجيب أسماء الملفات من مجلد mods
+   SYNC MODS
 ============================================================ */
 async function syncMods() {
     try {
         const result = await window.api.getModsList();
         if (!result?.success) return showNotify("Failed to load mods", "error");
 
-        // currentMods = أسماء الملفات فقط (بدون path)
         currentMods = Array.isArray(result.files) ? [...result.files] : [];
         pendingMods = [...currentMods];
-
-        updateModsCount();
+        updateStats();
         renderModsList();
     } catch {
         showNotify("Sync failed", "error");
@@ -474,48 +266,65 @@ async function syncMods() {
 }
 
 /* ============================================================
-   RENDER MODS LIST
+   RENDER MODS LIST (POPUP)
 ============================================================ */
 function renderModsList() {
     modsList.innerHTML = "";
 
     if (!pendingMods.length) {
-        modsList.innerHTML = `<div style="padding:25px;text-align:center;color:#777;">No mods installed</div>`;
+        modsList.innerHTML = `<div class="md-manage-empty">No mods installed yet. Click "Add Mod" to get started.</div>`;
+        manageCount.textContent = "0";
         return;
     }
 
-    pendingMods.forEach(file => {
-        // استخرج اسم الملف فقط للعرض
+    manageCount.textContent = pendingMods.length;
+
+    pendingMods.forEach((file, idx) => {
         const fileName = file.includes("\\") || file.includes("/")
             ? file.split(/[\\\/]/).pop()
             : file;
 
         const modData = allMods.find(m => m.file === fileName);
         const row = document.createElement("div");
-        row.style = "display:flex;justify-content:space-between;align-items:center;padding:10px;margin-bottom:8px;border-radius:12px;background:rgba(255,255,255,.03);";
+        row.className = "md-manage-row";
+        row.style.setProperty("--row-delay", `${idx * 0.03}s`);
 
         row.innerHTML = `
-            <div style="display:flex;align-items:center;gap:10px;overflow:hidden;">
-                <span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">${fileName}</span>
+            <div class="md-manage-row-left">
+                <div class="md-manage-row-icon">
+                    ${modData?.img
+                        ? `<img src="${modData.img}" alt="">`
+                        : `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"></path></svg>`
+                    }
+                </div>
+                <div>
+                    <div class="md-manage-row-name">${modData?.name || fileName}</div>
+                    <div class="md-manage-row-file">${fileName}</div>
+                </div>
             </div>
-            <button class="card-btn delete">Remove</button>
+            <button class="md-manage-remove-btn" data-file="${file}">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18"></path><path d="M6 6l12 12"></path>
+                </svg>
+            </button>
         `;
 
-        row.querySelector("button").onclick = () => {
+        row.querySelector(".md-manage-remove-btn").addEventListener("click", () => {
             pendingMods = pendingMods.filter(f => f !== file);
+            isDirty = true;
+            manageSaveStatus.textContent = "⚠️ Unsaved changes";
             renderModsList();
-            showNotify("Removed from list");
-        };
+        });
 
         modsList.appendChild(row);
     });
 }
 
 /* ============================================================
-   ADD MOD - يدعم أكثر من ملف مرة وحدة
+   ADD MOD
 ============================================================ */
-document.getElementById("addModBtn").onclick = async () => {
-    const btn = document.getElementById("addModBtn");
+$("addModBtn").onclick = async () => {
+    const btn = $("addModBtn");
     btn.disabled = true;
 
     const result = await window.api.addModFile();
@@ -524,89 +333,121 @@ document.getElementById("addModBtn").onclick = async () => {
     if (!result?.success || !result.files?.length) return;
 
     let addedCount = 0;
-
     result.files.forEach(filePath => {
         const fileName = filePath.split(/[\\\/]/).pop();
-
-        // تحقق إذا موجود بالفعل (بالاسم)
         const alreadyExists = pendingMods.some(f => {
             const existingName = f.includes("\\") || f.includes("/")
                 ? f.split(/[\\\/]/).pop()
                 : f;
             return existingName === fileName;
         });
-
         if (!alreadyExists) {
-            pendingMods.push(filePath); // نحفظ الـ path الكامل
+            pendingMods.push(filePath);
             addedCount++;
         }
     });
 
     if (addedCount > 0) {
+        isDirty = true;
+        manageSaveStatus.textContent = "⚠️ Unsaved changes";
         renderModsList();
-        showNotify(`تمت إضافة ${addedCount} ملف`, "success");
+        showNotify(`${addedCount} mod${addedCount > 1 ? 's' : ''} added`, "success");
     } else {
-        showNotify("الملفات موجودة بالفعل", "error");
+        showNotify("Already in list", "error");
     }
 };
 
 /* ============================================================
    DELETE ALL
 ============================================================ */
-document.getElementById("deleteAllBtn").onclick = () => {
+$("deleteAllBtn").onclick = () => {
+    if (!pendingMods.length) return;
     pendingMods = [];
+    isDirty = true;
+    manageSaveStatus.textContent = "⚠️ Unsaved changes";
     renderModsList();
-    showNotify("All removed from list");
+    showNotify("All mods removed from list");
 };
 
 /* ============================================================
-   SAVE - يرسل القائمة كما هي (أسماء + paths)
-   main.js يتكفل بالتفريق
+   SAVE
 ============================================================ */
-document.getElementById("saveModsBtn").onclick = async () => {
-    const btn = document.getElementById("saveModsBtn");
+$("saveModsBtn").onclick = async () => {
+    const btn = $("saveModsBtn");
     btn.disabled = true;
-    btn.innerText = "Saving...";
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg> Saving...`;
 
     try {
         const result = await window.api.saveMods(pendingMods);
-
         if (!result?.success) {
             showNotify("Save failed", "error");
+            btn.disabled = false;
+            btn.innerHTML = `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Failed`;
             return;
         }
 
-        // بعد الحفظ، نحدّث currentMods بأسماء الملفات فقط
         currentMods = pendingMods.map(f =>
             f.includes("\\") || f.includes("/")
                 ? f.split(/[\\\/]/).pop()
                 : f
         );
 
-        updateModsCount();
+        isDirty = false;
+        manageSaveStatus.textContent = "✓ Saved";
+        updateStats();
         renderSections();
         popup.classList.add("hidden");
-        showNotify("Saved successfully");
-
+        popup.classList.remove("popup-opening");
+        showNotify("Mods saved successfully ✅");
     } catch (err) {
         console.error(err);
         showNotify("Save failed", "error");
     } finally {
         btn.disabled = false;
-        btn.innerText = "Save Changes";
+        btn.innerHTML = `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Changes`;
     }
 };
 
 /* ============================================================
    SEARCH
 ============================================================ */
-document.getElementById("modsSearch")?.addEventListener("input", e => {
-    const q = e.target.value.toLowerCase();
-    document.querySelectorAll(".pack-card").forEach(card => {
-        const name = card.querySelector(".pack-name")?.textContent?.toLowerCase() || "";
-        card.style.display = name.includes(q) ? "" : "none";
-    });
+const searchInput = $("modsSearch");
+const clearBtn = $("clearSearch");
+
+function toggleClearBtn() {
+    if (searchInput.value.trim()) {
+        clearBtn.classList.remove("hidden-btn");
+    } else {
+        clearBtn.classList.add("hidden-btn");
+    }
+}
+
+function doSearch() {
+    searchQuery = searchInput.value.trim();
+    toggleClearBtn();
+    renderSections();
+}
+
+searchInput.addEventListener("input", doSearch);
+
+clearBtn.addEventListener("click", () => {
+    searchInput.value = "";
+    searchQuery = "";
+    clearBtn.classList.add("hidden-btn");
+    searchInput.focus();
+    renderSections();
 });
+
+// Init hidden state
+toggleClearBtn();
+
+/* ============================================================
+   LOGOUT
+============================================================ */
+async function logout() {
+    await window.api.auth.logout();
+    window.api.openPage("login.html");
+}
 
 /* ============================================================
    INIT
@@ -615,13 +456,14 @@ document.getElementById("modsSearch")?.addEventListener("input", e => {
     const authed = await checkAuth();
     if (!authed) return;
 
-    // Fetch mods from server
     const fetched = await fetchModsFromServer();
     if (!fetched) {
-        showNotify("فشل تحميل البيانات من السيرفر", "error");
+        showNotify("Failed to load mods from server", "error");
+        mdSkeleton.classList.add("hidden");
         return;
     }
 
     await syncMods();
+    renderTabs();
     renderSections();
 })();
