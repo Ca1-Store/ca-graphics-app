@@ -176,10 +176,9 @@ contextBridge.exposeInMainWorld("api", {
 
             ipcRenderer.invoke("ratings:deleteComment", { commentId, discordId }),
 
-        deleteRating: (ratingId) =>
+        deleteRating: (ratingId, discordId) =>
 
-            ipcRenderer.invoke("ratings:deleteRating", { ratingId }),
-
+            ipcRenderer.invoke("ratings:deleteRating", { ratingId, discordId }),
     },
 
 

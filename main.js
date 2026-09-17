@@ -5178,7 +5178,7 @@ ipcMain.handle("ratings:deleteComment", async (e, { commentId, discordId }) => {
 
 
 
-ipcMain.handle("ratings:deleteRating", async (e, { ratingId }) => {
+ipcMain.handle("ratings:deleteRating", async (e, { ratingId, discordId }) => {
 
     return await fetchBackend(`${BACKEND_URL}/api/ratings/rating`, {
 
@@ -5186,12 +5186,11 @@ ipcMain.handle("ratings:deleteRating", async (e, { ratingId }) => {
 
         headers: { "Content-Type": "application/json" },
 
-        body: JSON.stringify({ ratingId })
+        body: JSON.stringify({ ratingId, discordId })
 
     });
 
 });
-
 
 
 

@@ -183,9 +183,9 @@ async function deleteComment(packId, commentId) {
 async function deleteRating(packId, ratingId) {
     if (!confirm("هل أنت متأكد من حذف هذا التقييم؟")) return;
 
-    const r = await window.api.ratings.deleteRating(ratingId);
+    const r = await window.api.ratings.deleteRating(ratingId, currentDiscordId);
     if (r.success) {
-        showNotify("✅ تم حذف التقييم بنجاح");
+                showNotify("✅ تم حذف التقييم بنجاح");
         await loadRatings();
         loadPacks();
         loadPackComments(packId);
