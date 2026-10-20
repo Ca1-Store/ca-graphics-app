@@ -1,241 +1,115 @@
-/* =========================================================
-   ELEMENTS
-========================================================= */
+/* ==========================================================================
+   HOME — الرئيسية
+   ========================================================================== */
+const $id = (id) => document.getElementById(id);
 
-const packsCount = document.getElementById("packsCount");
-const modsCount = document.getElementById("modsCount");
-const reshadeStatus = document.getElementById("reshadeStatus");
-const lastUpdate = document.getElementById("lastUpdate");
+const packsCount = $id("packsCount");
+const modsCount = $id("modsCount");
+const reshadeStatus = $id("reshadeStatus");
+const lastUpdate = $id("lastUpdate");
+const welcomeName = $id("welcomeName");
+const welcomePlan = $id("welcomePlan");
+const fivemStatus = $id("fivemStatus");
+const pathsStatus = $id("pathsStatus");
+const connectionStatus = $id("connectionStatus");
+const connectionPill = $id("connectionPill");
+const connectionBar = $id("connectionBar");
 
-const welcomeName = document.getElementById("welcomeName");
-const welcomePlan = document.getElementById("welcomePlan");
+const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
 
-const fivemStatus = document.getElementById("fivemStatus");
-const pathsStatus = document.getElementById("pathsStatus");
-
-const connectionStatus = document.getElementById("connectionStatus");
-const connectionPill = document.getElementById("connectionPill");
-const connectionBar = document.getElementById("connectionBar");
-
-/* =========================================================
-   AUTH
-========================================================= */
-
+/* ── AUTH ── */
 async function checkAuth() {
-
     const result = await window.api.auth.check();
-
     if (!result.success) {
         window.api.openPage("login.html");
-        return false;
+        return null;
     }
 
-    if (welcomeName) {
-        welcomeName.textContent = result.username || "User";
-    }
-
-    if (welcomePlan) {
-
-        const plans = result.plans || [];
-
-        welcomePlan.textContent =
-            plans.length > 0
-                ? plans.join(" + ")
-                : "No Subscription";
-
-    }
-
-    return result;
-
-}
-
-/* =========================================================
-   PACKS
-========================================================= */
-
-async function loadPacksCount() {
-
-    const result = await window.api.auth.check();
-
-    if (!result.success) return;
+    welcomeName.textContent = result.username || "مستخدم";
 
     const plans = result.plans || [];
+    welcomePlan.textContent = plans.length ? plans.join(" + ") : "بدون اشتراك";
+    packsCount.textContent = plans.length;
 
-    if (packsCount) {
-        packsCount.textContent = plans.length;
-    }
-
+    return result;
 }
 
-/* =========================================================
-   MODS
-========================================================= */
-
+/* ── MODS ── */
 async function loadModsCount() {
-
-    const result = await window.api.getModsList();
-
-    if (!result.success) {
-
-        if (modsCount) {
-            modsCount.textContent = "0";
-        }
-
-        return;
+    try {
+        const result = await window.api.getModsList();
+        modsCount.textContent = result && result.success ? result.files.length : "0";
+    } catch {
+        modsCount.textContent = "0";
     }
-
-    if (modsCount) {
-        modsCount.textContent = result.files.length;
-    }
-
 }
 
-/* =========================================================
-   RESHADE
-========================================================= */
+/* ── RESHADE ── */
+function setReshade(text, color) {
+    reshadeStatus.textContent = text;
+    reshadeStatus.style.color = color || "";
+}
 
 async function loadReShadeStatus() {
-
     const fivem = await window.api.getFiveMPath();
-
-    if (!fivem.success) {
-
-        reshadeStatus.textContent = "Unavailable";
-        reshadeStatus.style.color = "#ff4d6a";
-
-        return;
-    }
+    if (!fivem.success) return setReshade("غير متاح", "var(--text-3)");
 
     try {
-
-        const content = await window.api.readFile(`${fivem.path}/CitizenFX.ini`);
-
-        const enabled = content && content.includes("ReShade5=");
-
-        reshadeStatus.textContent = enabled
-            ? "Enabled"
-            : "Disabled";
-
-        reshadeStatus.style.color = enabled
-            ? "#00ffae"
-            : "#ff4d6a";
-
+        const content = await window.api.readFile(`${fivem.path}\\CitizenFX.ini`);
+        const enabled = !!content && content.includes("ReShade5=");
+        setReshade(enabled ? "مفعّل" : "معطّل", enabled ? "var(--ok)" : "var(--err)");
     } catch {
-
-        reshadeStatus.textContent = "Disabled";
-        reshadeStatus.style.color = "#ff4d6a";
-
+        setReshade("معطّل", "var(--err)");
     }
-
 }
 
-/* =========================================================
-   LAST UPDATE
-========================================================= */
-
+/* ── LAST UPDATE ── */
 function loadLastUpdate() {
-
-    const date = localStorage.getItem("last_update");
-
-    if (lastUpdate) {
-        lastUpdate.textContent = date || "No Updates";
-    }
-
+    let date = null;
+    try { date = localStorage.getItem("last_update"); } catch {}
+    lastUpdate.textContent = date || "لا يوجد";
 }
 
-/* =========================================================
-   SYSTEM STATUS
-========================================================= */
+/* ── SYSTEM ── */
+function setPill(el, ok, text) {
+    el.textContent = text;
+    el.className = `status-pill ${ok ? "online" : "offline"}`;
+}
 
-async function loadSystemStatus() {
-
+async function loadFiveM() {
     const fivem = await window.api.getFiveMPath();
-
-    /* FiveM */
-
     if (fivem.success) {
-
-        fivemStatus.textContent = "Ready";
-        fivemStatus.className = "status-pill online";
-
+        setPill(fivemStatus, true, "جاهز");
         pathsStatus.textContent = fivem.path;
-
+        pathsStatus.title = fivem.path;
     } else {
-
-        fivemStatus.textContent = "Not Configured";
-        fivemStatus.className = "status-pill offline";
-
-        pathsStatus.textContent = "No Path Selected";
-
+        setPill(fivemStatus, false, "غير مُعدّ");
+        pathsStatus.textContent = "لم يتم تحديد مسار";
     }
-
-    /* Connection */
-
-    fetch("https://www.google.com", {
-        mode: "no-cors"
-    })
-
-    .then(() => {
-
-        connectionStatus.textContent = "Connected";
-
-        if (connectionPill) {
-            connectionPill.textContent = "Online";
-            connectionPill.className = "status-pill online";
-        }
-
-        if (connectionBar) {
-            connectionBar.style.width = "100%";
-        }
-
-    })
-
-    .catch(() => {
-
-        connectionStatus.textContent = "Disconnected";
-
-        if (connectionPill) {
-            connectionPill.textContent = "Offline";
-            connectionPill.className = "status-pill offline";
-        }
-
-        if (connectionBar) {
-            connectionBar.style.width = "25%";
-        }
-
-    });
-
 }
 
-/* =========================================================
-   LOGOUT
-========================================================= */
-
-async function logout() {
-
-    await window.api.auth.logout();
-    window.api.openPage("login.html");
-
+async function checkConnection() {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 7000);
+    try {
+        await fetch(`${BACKEND_URL}/api/packs`, { method: "GET", signal: ctrl.signal, cache: "no-store" });
+        connectionStatus.textContent = "متصل";
+        setPill(connectionPill, true, "متصل");
+        connectionBar.style.width = "100%";
+    } catch {
+        connectionStatus.textContent = "غير متصل";
+        setPill(connectionPill, false, "غير متصل");
+        connectionBar.style.width = "25%";
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
-/* =========================================================
-   INIT
-========================================================= */
-
-async function init() {
-
+/* ── INIT ── */
+(async function init() {
     const authed = await checkAuth();
-
     if (!authed) return;
 
-    await loadPacksCount();
-    await loadModsCount();
-    await loadReShadeStatus();
-
     loadLastUpdate();
-
-    await loadSystemStatus();
-
-}
-
-init();
+    await Promise.allSettled([loadModsCount(), loadReShadeStatus(), loadFiveM(), checkConnection()]);
+})();

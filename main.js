@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell } = require("electron");
 
 const { autoUpdater } = require("electron-updater");
 
@@ -48,6 +48,7 @@ let tray = null;
 
 
 
+let activeDl = null;
 const dlState = {
 
 
@@ -319,7 +320,9 @@ function createWindow() {
 
 
 
-        width: 1100, height: 700,
+        width: 1180, height: 740, minWidth: 960, minHeight: 620,
+        icon: path.join(__dirname, "build", "icon.ico"),
+        backgroundColor: "#00000000",
 
 
 
@@ -784,6 +787,22 @@ ipcMain.handle("window:fullscreen", () => {
 
 });
 
+/* قراءة ملفات نصية داخل مجلد FiveM المحفوظ فقط (للعرض في الصفحة الرئيسية) */
+ipcMain.handle("file:read", (e, filePath) => {
+    try {
+        if (!fs.existsSync(FIVEM_PATH_FILE)) return null;
+        const root = path.resolve(fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim());
+        const target = path.resolve(String(filePath || ""));
+        const rel = path.relative(root, target);
+        if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return null;
+        if (!/\.(ini|txt|log|json)$/i.test(target)) return null;
+        const st = fs.statSync(target);
+        if (!st.isFile() || st.size > 1024 * 1024) return null;
+        return fs.readFileSync(target, "utf8");
+    } catch { return null; }
+});
+
+
 
 
 ipcMain.handle("open:page", (e, page) =>
@@ -815,6 +834,26 @@ ipcMain.handle("open:page", (e, page) =>
 
 
 ipcMain.handle("download:getState", () => ({ ...dlState }));
+
+ipcMain.handle("download:pause", () => {
+    if (!activeDl || !dlState.running) return { success: false };
+    activeDl.paused = true; dlState.paused = true;
+    activeDl.response.pause();
+    return { success: true };
+});
+ipcMain.handle("download:resume", () => {
+    if (!activeDl || !dlState.running) return { success: false };
+    activeDl.touch();
+    activeDl.paused = false; dlState.paused = false;
+    activeDl.response.resume();
+    return { success: true };
+});
+ipcMain.handle("download:cancel", () => {
+    if (!activeDl || !dlState.running) return { success: false };
+    activeDl.cancel();
+    activeDl = null;
+    return { success: true };
+});
 
 
 
@@ -1478,8 +1517,11 @@ function httpsGet(url, headers = {}, maxR = 10) {
 
 
 
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", ...headers }
-
+            headers: {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "Accept-Encoding": "identity",
+    ...headers
+}
 
 
         }, res => {
@@ -1641,6 +1683,7 @@ ipcMain.handle("download:start", async (e, { url, product, name }) => {
             // Use highWaterMark for better performance
 
             const file = fs.createWriteStream(zipPath, { highWaterMark: 1024 * 1024 * 16 }); // 16MB buffer
+            dlState.paused = false; dlState.downloaded = 0; dlState.total = total;
 
 
 
@@ -1648,7 +1691,7 @@ ipcMain.handle("download:start", async (e, { url, product, name }) => {
 
             const timeoutCheck = setInterval(() => {
 
-                if (Date.now() - lastDataTime > TIMEOUT_MS) {
+                if (!(activeDl && activeDl.paused) && Date.now() - lastDataTime > TIMEOUT_MS) {
 
                     clearInterval(timeoutCheck);
 
@@ -1661,6 +1704,21 @@ ipcMain.handle("download:start", async (e, { url, product, name }) => {
                 }
 
             }, 3000); // Check every 3 seconds instead of 5
+
+            activeDl = {
+                response, paused: false,
+                touch() { lastDataTime = Date.now(); lastDownloadTime = Date.now(); lastDownloaded = downloaded; },
+                cancel() {
+                    clearInterval(timeoutCheck);
+                    response.removeAllListeners("error"); response.on("error", () => {});
+                    file.removeAllListeners("error"); file.on("error", () => {});
+                    try { response.destroy(); } catch {}
+                    try { file.destroy(); } catch {}
+                    fs.unlink(zipPath, () => {});
+                    dlState.running = false; dlState.stage = ""; dlState.paused = false; dlState.percent = 0;
+                    resolve({ success: false, canceled: true });
+                }
+            };
 
 
 
@@ -1702,7 +1760,8 @@ ipcMain.handle("download:start", async (e, { url, product, name }) => {
 
                 dlState.percent = percent;
 
-                send("download:progress", { percent, speed: dlState.speed });
+                dlState.downloaded = downloaded;
+                send("download:progress", { percent, speed: dlState.speed, downloaded, total });
 
             });
 
@@ -2106,6 +2165,43 @@ ipcMain.handle("install:run", async (e, { zipPath, product }) => {
 
 
 
+/* ── نسخة احتياطية للجرافيكس (citizen / plugins / mods) ── */
+const BACKUP_DIR = path.join(app.getPath("userData"), "graphics_backup");
+function readFivemPath() {
+    try { return fs.existsSync(FIVEM_PATH_FILE) ? fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim() : null; } catch { return null; }
+}
+ipcMain.handle("graphics:backup", async () => {
+    try {
+        const fivem = readFivemPath();
+        if (!fivem || !fs.existsSync(fivem)) return { success: false, message: "مسار FiveM غير محدد" };
+        const found = GRAPHICS_FOLDERS.filter((f) => fs.existsSync(path.join(fivem, f)));
+        if (!found.length) return { success: true, empty: true };
+        await fs.promises.rm(BACKUP_DIR, { recursive: true, force: true });
+        await fs.promises.mkdir(BACKUP_DIR, { recursive: true });
+        for (const f of found) await fs.promises.cp(path.join(fivem, f), path.join(BACKUP_DIR, f), { recursive: true });
+        fs.writeFileSync(path.join(BACKUP_DIR, "backup.json"), JSON.stringify({ date: new Date().toISOString(), folders: found }));
+        return { success: true, folders: found };
+    } catch (e) { return { success: false, message: String(e && e.message || e) }; }
+});
+ipcMain.handle("graphics:backupInfo", () => {
+    try {
+        const f = path.join(BACKUP_DIR, "backup.json");
+        if (!fs.existsSync(f)) return { success: true, exists: false };
+        return { success: true, exists: true, ...JSON.parse(fs.readFileSync(f, "utf8")) };
+    } catch { return { success: true, exists: false }; }
+});
+ipcMain.handle("graphics:restore", async () => {
+    try {
+        const fivem = readFivemPath();
+        const f = path.join(BACKUP_DIR, "backup.json");
+        if (!fivem || !fs.existsSync(f)) return { success: false, message: "لا توجد نسخة احتياطية" };
+        const { folders = [] } = JSON.parse(fs.readFileSync(f, "utf8"));
+        for (const name of GRAPHICS_FOLDERS) await deleteFolder(path.join(fivem, name));
+        for (const name of folders) await fs.promises.cp(path.join(BACKUP_DIR, name), path.join(fivem, name), { recursive: true });
+        return { success: true };
+    } catch (e) { return { success: false, message: String(e && e.message || e) }; }
+});
+
 ipcMain.handle("graphics:delete", async () => {
 
 
@@ -2180,11 +2276,12 @@ ipcMain.handle("download:launchers", async () => {
 
             const res   = await httpsGet(url);
 
-
+            if (res.statusCode !== 200) {
+                console.error(`Launcher download failed (${fileName}): HTTP ${res.statusCode}`);
+                continue;
+            }
 
             const total = parseInt(res.headers["content-length"] || "0");
-
-
 
             let dl = 0;
 
@@ -5406,3 +5503,121 @@ ipcMain.handle("customizations:delete", async (e, customizationId) => {
     }
 });
 
+
+
+/* ============================================================
+   PRESETS — فلاتر ReShade (plugins/preset، صيغة .ini فقط)
+============================================================ */
+const PRESET_MAX_BYTES = 2 * 1024 * 1024;
+
+function presetsDir() {
+    if (!fs.existsSync(FIVEM_PATH_FILE)) return null;
+    const root = fs.readFileSync(FIVEM_PATH_FILE, "utf8").trim();
+    return root ? path.join(root, "plugins", "preset") : null;
+}
+function safePresetName(name) {
+    let n = path.basename(String(name || "")).replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim();
+    if (!/\.ini$/i.test(n) || n.length < 5 || n.length > 120 || n.startsWith(".")) return null;
+    return n;
+}
+/* تحقق: ملف نصي صالح بصيغة ini (أقسام أو مفاتيح=قيم) وبدون بيانات ثنائية */
+function validateIni(buf) {
+    if (!Buffer.isBuffer(buf) || !buf.length) return "الملف فارغ";
+    if (buf.length > PRESET_MAX_BYTES) return "حجم الملف كبير جداً";
+    if (buf.includes(0)) return "الملف ليس نصياً بصيغة ini";
+    const text = buf.toString("utf8").replace(/^\uFEFF/, "");
+    if (/^\s*(<!doctype|<html|PK\x03|MZ)/i.test(text)) return "الملف ليس بصيغة ini";
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith(";") && !l.startsWith("#"));
+    if (!lines.length) return "الملف لا يحتوي إعدادات";
+    const ok = lines.filter((l) => /^\[[^\]]+\]$/.test(l) || /^[^=\s][^=]*=/.test(l)).length;
+    if (ok / lines.length < 0.8) return "محتوى الملف غير صالح لصيغة ini";
+    return null;
+}
+
+ipcMain.handle("presets:list", () => {
+    try {
+        const dir = presetsDir();
+        if (!dir) return { success: false, message: "حدّد مسار FiveM من الإعدادات أولاً", noPath: true };
+        if (!fs.existsSync(dir)) return { success: true, files: [] };
+        const files = fs.readdirSync(dir).filter((f) => /\.ini$/i.test(f)).map((f) => {
+            const st = fs.statSync(path.join(dir, f));
+            return st.isFile() ? { file: f, size: st.size, mtime: st.mtimeMs } : null;
+        }).filter(Boolean).sort((a, b) => a.file.localeCompare(b.file, "en", { numeric: true }));
+        return { success: true, files };
+    } catch (err) { console.error(err); return { success: false, message: "تعذّر قراءة مجلد الفلاتر" }; }
+});
+
+ipcMain.handle("presets:remove", (e, names) => {
+    try {
+        const dir = presetsDir();
+        if (!dir) return { success: false };
+        let n = 0;
+        for (const raw of [].concat(names || [])) {
+            const name = safePresetName(raw);
+            if (!name) continue;
+            const p = path.join(dir, name);
+            if (fs.existsSync(p)) { fs.unlinkSync(p); n++; }
+        }
+        return { success: true, removed: n };
+    } catch (err) { console.error(err); return { success: false, message: "فشل الحذف" }; }
+});
+
+ipcMain.handle("presets:pick", async () => {
+    const r = await dialog.showOpenDialog(mainWindow, {
+        title: "اختر ملفات الفلاتر", properties: ["openFile", "multiSelections"],
+        filters: [{ name: "ReShade Preset (.ini)", extensions: ["ini"] }]
+    });
+    if (r.canceled) return { success: false };
+    const items = [];
+    for (const fp of r.filePaths) {
+        try {
+            const st = fs.statSync(fp);
+            items.push({ name: path.basename(fp), content: st.size <= PRESET_MAX_BYTES ? fs.readFileSync(fp).toString("base64") : null });
+        } catch { items.push({ name: path.basename(fp), content: null }); }
+    }
+    return { success: true, items };
+});
+
+/* حفظ فلتر قادم من المستخدم (سحب/اختيار): content بصيغة base64 */
+ipcMain.handle("presets:save", (e, { name, content, overwrite }) => {
+    try {
+        const dir = presetsDir();
+        if (!dir) return { success: false, message: "حدّد مسار FiveM من الإعدادات أولاً" };
+        const safe = safePresetName(name);
+        if (!safe) return { success: false, message: "مرفوض: يُسمح بملفات .ini فقط" };
+        const buf = Buffer.from(String(content || ""), "base64");
+        const bad = validateIni(buf);
+        if (bad) return { success: false, message: bad };
+        fs.mkdirSync(dir, { recursive: true });
+        const dest = path.join(dir, safe);
+        if (fs.existsSync(dest) && !overwrite) return { success: false, exists: true, name: safe };
+        fs.writeFileSync(dest, buf);
+        return { success: true, name: safe };
+    } catch (err) { console.error(err); return { success: false, message: "فشل حفظ الفلتر" }; }
+});
+
+/* تنزيل فلتر من المكتبة (الباكند) */
+ipcMain.handle("presets:install", async (e, { file, url, overwrite }) => {
+    try {
+        const dir = presetsDir();
+        if (!dir) return { success: false, message: "حدّد مسار FiveM من الإعدادات أولاً" };
+        const safe = safePresetName(file);
+        if (!safe) return { success: false, message: "اسم الملف غير صالح (.ini فقط)" };
+        if (!/^https?:\/\//i.test(String(url || ""))) return { success: false, message: "رابط غير صالح" };
+        const dest = path.join(dir, safe);
+        if (fs.existsSync(dest) && !overwrite) return { success: false, exists: true, name: safe };
+        const res = await httpsGet(resolveGDrive(url));
+        if (res.statusCode && res.statusCode !== 200) return { success: false, message: "تعذّر تنزيل الفلتر" };
+        const chunks = []; let size = 0;
+        await new Promise((ok, fail) => {
+            res.on("data", (c) => { size += c.length; if (size > PRESET_MAX_BYTES) { res.destroy(); fail(new Error("too big")); } else chunks.push(c); });
+            res.on("end", ok); res.on("error", fail);
+        });
+        const buf = Buffer.concat(chunks);
+        const bad = validateIni(buf);
+        if (bad) return { success: false, message: bad };
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(dest, buf);
+        return { success: true, name: safe };
+    } catch (err) { console.error(err); return { success: false, message: "فشل تنزيل الفلتر" }; }
+});

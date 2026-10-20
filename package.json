@@ -1,6 +1,6 @@
 {
   "name": "ca-graphics-app",
-  "version": "1.2.10",
+  "version": "1.2.11",
   "description": "CA Store Graphics Installer",
   "main": "main.js",
   "scripts": {
@@ -35,6 +35,7 @@
   "build": {
     "appId": "com.castore.graphicsapp",
     "productName": "Ca App",
+    "files": ["main.js", "preload.js", "app/**/*", "assets/**/*", "build/**/*", "package.json"],
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico"

@@ -1,235 +1,420 @@
-/* ============================================================
-   DOWNLOADS PAGE - نظام تحميل محسّن مع polling
-============================================================ */
+/* ==========================================================================
+   DOWNLOADS — التحميلات (v2: إيقاف مؤقت / استئناف / إلغاء / ETA / سجل)
+   ========================================================================== */
+const { ic, esc, toast, confirm: askConfirm } = window.CA;
+const $ = (id) => document.getElementById(id);
 
-const box       = document.getElementById("downloadBox");
-const bar       = document.getElementById("progressBar");
-const pct       = document.getElementById("progressPercent");
-const spd       = document.getElementById("progressSpeed");
-const dlName    = document.getElementById("downloadName");
-const dlStatus  = document.getElementById("downloadStatus");
-const statusDot = document.getElementById("statusDot");
-const emptyMsg  = document.getElementById("emptyMsg");
-const historyEl = document.getElementById("downloadHistory");
+const box = $("downloadBox"), bar = $("progressBar"), pct = $("progressPercent"), spd = $("progressSpeed");
+const dlName = $("downloadName"), dlStatus = $("downloadStatus"), statusDot = $("statusDot");
+const emptyMsg = $("emptyMsg"), historyEl = $("downloadHistory");
+const controls = $("dlControls"), track = $("dlTrack");
 
-let downloadHistory = JSON.parse(localStorage.getItem("download_history") || "[]");
-let pollTimer = null;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/* ── STEPS ── */
+let downloadHistory = [];
+try { downloadHistory = JSON.parse(localStorage.getItem("download_history") || "[]"); } catch {}
+let histFilter = "all";
+let pollTimer = null, tickTimer = null;
+
+/* حالة العنصر الجاري */
+let cur = null;            // { payload, startedAt, logged, canceled }
+let paused = false;
+let cancelAll = false;
+
+/* ── helpers ── */
+function fmtBytes(n) {
+    n = Number(n) || 0;
+    if (n >= 1024 ** 3) return (n / 1024 ** 3).toFixed(2) + " GB";
+    if (n >= 1024 ** 2) return (n / 1024 ** 2).toFixed(1) + " MB";
+    if (n >= 1024) return Math.round(n / 1024) + " KB";
+    return n + " B";
+}
+function fmtTime(sec) {
+    sec = Math.max(0, Math.round(sec));
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+}
+function notifyOS(title, body) {
+    try { if (document.hidden) new Notification(title, { body, silent: false }); } catch {}
+}
+
+/* ── steps ── */
 const STEPS = ["download", "extract", "install", "hide", "done"];
-
 function setStep(name) {
-    STEPS.forEach(s => {
-        const el = document.getElementById(`step-${s}`);
-        if (!el) return;
-        el.className = "dl-step";
-        const i = STEPS.indexOf(s), ai = STEPS.indexOf(name);
-        if (i < ai) el.classList.add("done");
-        else if (i === ai) el.classList.add("active");
+    const ai = STEPS.indexOf(name);
+    STEPS.forEach((s, i) => {
+        const el = $(`step-${s}`);
+        if (el) el.className = "step" + (i < ai ? " done" : i === ai ? " active" : "");
     });
 }
-
-function setStatus(msg, color = "#7cb0ff", dot = "#4f8cff") {
-    if (dlStatus) { dlStatus.textContent = msg; dlStatus.style.color = color; }
-    if (statusDot) { statusDot.style.background = dot; statusDot.style.animation = "pulse-dot 1.4s ease infinite"; }
+function setStatus(msg, tone = "info") {
+    dlStatus.textContent = msg;
+    statusDot.className = "dl-dot " + tone;
 }
 
-function setProgress(percent, speed = null) {
-    if (bar) bar.style.width = percent + "%";
-    if (pct) pct.textContent = percent + "%";
-    if (speed !== null && spd) spd.textContent = speed;
+/* ── progress ── */
+let lastBytes = { done: 0, total: 0, speed: 0 };
+function setProgress(percent, speed = null, done = null, total = null) {
+    const p = Math.max(0, Math.min(100, Number(percent) || 0));
+    bar.style.width = p + "%";
+    pct.textContent = Math.round(p) + "%";
+    if (speed !== null && speed !== undefined) {
+        spd.textContent = typeof speed === "number" || /^[\d.]+$/.test(String(speed)) ? `${speed} MB/s` : speed;
+        lastBytes.speed = parseFloat(speed) || 0;
+    }
+    if (done !== null && done !== undefined) {
+        lastBytes.done = done; lastBytes.total = total || 0;
+        $("progressSize").textContent = total ? `${fmtBytes(done)} / ${fmtBytes(total)}` : fmtBytes(done);
+    }
+    if (lastBytes.total && lastBytes.speed > 0 && !paused) {
+        $("progressEta").textContent = fmtTime((lastBytes.total - lastBytes.done) / (lastBytes.speed * 1024 * 1024));
+    } else if (paused) $("progressEta").textContent = "—";
 }
+function resetCells() {
+    lastBytes = { done: 0, total: 0, speed: 0 };
+    $("progressSize").textContent = "—";
+    $("progressEta").textContent = "—";
+    $("progressElapsed").textContent = "0:00";
+    spd.textContent = "0 MB/s";
+}
+
+function startTick() {
+    stopTick();
+    tickTimer = setInterval(() => {
+        if (cur && !paused) $("progressElapsed").textContent = fmtTime((Date.now() - cur.startedAt) / 1000);
+    }, 1000);
+}
+function stopTick() { if (tickTimer) { clearInterval(tickTimer); tickTimer = null; } }
 
 function showBox(name) {
-    if (emptyMsg) emptyMsg.style.display = "none";
-    if (box) box.style.display = "block";
-    if (dlName && name) dlName.textContent = name;
+    emptyMsg.style.display = "none";
+    box.style.display = "";
+    if (name) dlName.textContent = name;
 }
-
 function hideBox() {
-    if (box) box.style.display = "none";
-    if (emptyMsg) emptyMsg.style.display = "block";
-    stopPolling();
+    box.style.display = "none";
+    emptyMsg.style.display = queueState.length > 1 ? "none" : "";
+    stopPolling(); stopTick();
 }
 
-/* ── POLLING ── */
+/* ── pause / cancel UI ── */
+function setPaused(p) {
+    paused = p;
+    track.classList.toggle("paused", p);
+    $("pauseBtn").innerHTML = p ? `${ic("play")}استئناف` : `${ic("pause")}إيقاف مؤقت`;
+    if (p) { setStatus("متوقف مؤقتاً", "paused"); spd.textContent = "0 MB/s"; $("progressEta").textContent = "—"; }
+    else setStatus("جاري التحميل...", "info");
+}
+$("pauseBtn").addEventListener("click", async () => {
+    const r = await (paused ? window.api.resumeDownload() : window.api.pauseDownload());
+    if (r && r.success) setPaused(!paused);
+    else toast("لا يمكن التحكم بالتحميل الآن", "error");
+});
+async function doCancel() {
+    const r = await window.api.cancelDownload();
+    if (cur) cur.canceled = true;
+    return r && r.success;
+}
+$("cancelBtn").addEventListener("click", async () => {
+    const ok = await askConfirm({
+        title: "إلغاء التحميل؟", message: "سيتوقف التحميل وتُحذف الملفات المؤقتة.", confirmText: "إلغاء التحميل", danger: true
+    });
+    if (ok) await doCancel();
+});
+
+/* ── polling (يشمل إعادة فتح الصفحة أثناء تحميل جارٍ) ── */
+const isIdle = (s) => !s || (!s.running && (!s.stage || s.stage === "done" || s.stage === "error"));
 function startPolling() {
-    if (pollTimer) clearInterval(pollTimer);
+    stopPolling();
     pollTimer = setInterval(async () => {
-        const state = await window.api.getDownloadState();
-        if (!state || (!state.running && (!state.stage || state.stage === "done" || state.stage === "error"))) {
-            stopPolling();
-            return;
-        }
-        applyStage(state.stage, state.percent, state.speed);
-    }, 800);
+        const s = await window.api.getDownloadState();
+        if (isIdle(s)) return stopPolling();
+        if (s.paused !== undefined && s.paused !== paused && s.stage === "downloading") setPaused(!!s.paused);
+        applyStage(s.stage, s.percent, s.speed, s.downloaded, s.total);
+    }, 900);
 }
+function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
-function stopPolling() {
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-}
-
-/* ── APPLY STAGE ── */
-function applyStage(stage, percent = 0, speed = null) {
-    if (percent !== null) setProgress(percent, speed ? speed + " MB/s" : null);
-
-    const stageMap = {
-        downloading: ["download",  "جاري التحميل...",       "#7cb0ff", "#4f8cff"],
-        preparing:   ["extract",   "جاري التحضير...",       "#a78bfa", "#7c5cff"],
-        extracting:  ["extract",   "جاري فك الضغط...",      "#7cb0ff", "#4f8cff"],
-        installing:  ["extract",   "جاري التثبيت...",       "#a78bfa", "#7c5cff"],
-        copying:     ["install",   "جاري نسخ الملفات...",   "#a78bfa", "#7c5cff"],
-        hiding:      ["hide",      "جاري حماية الملفات...", "#ffb347", "#ffb347"],
-        done:        ["done",      "تم بنجاح! ✅",           "#00ffae", "#00ffae"],
-        error:       ["download",  "❌ حدث خطأ",             "#ff4d6a", "#ff4d6a"],
-    };
-
-    const [step, msg, color, dot] = stageMap[stage] || ["download", stage, "#7cb0ff", "#4f8cff"];
+const STAGES = {
+    downloading: ["download", "جاري التحميل...", "info"],
+    preparing:   ["extract",  "جاري التحضير...", "info"],
+    extracting:  ["extract",  "جاري فك الضغط...", "info"],
+    installing:  ["extract",  "جاري التثبيت...", "info"],
+    copying:     ["install",  "جاري نسخ الملفات...", "info"],
+    hiding:      ["hide",     "جاري حماية الملفات...", "warn"],
+    done:        ["done",     "تم بنجاح", "ok"],
+    error:       ["download", "حدث خطأ أثناء العملية", "err"]
+};
+function applyStage(stage, percent = null, speed = null, done = null, total = null) {
+    if (percent !== null && percent !== undefined) setProgress(percent, speed, done, total);
+    const [step, msg, tone] = STAGES[stage] || ["download", stage || "...", "info"];
     setStep(step);
-    setStatus(msg, color, dot);
-
-    if (stage === "done" || stage === "error") {
-        if (statusDot) statusDot.style.animation = "none";
-    }
+    if (!(stage === "downloading" && paused)) setStatus(msg, tone);
+    controls.classList.toggle("hidden", stage !== "downloading");
+    if (stage === "done") { setStep("done"); $("step-done").classList.replace("active", "done"); }
 }
 
-/* ── HISTORY ── */
+/* ── history ── */
+function renderStats() {
+    const ok = downloadHistory.filter((h) => (h.st || "ok") === "ok").length;
+    $("stOk").textContent = ok;
+    $("stFail").textContent = downloadHistory.length - ok;
+    const last = downloadHistory[downloadHistory.length - 1];
+    $("stLast").textContent = last ? String(last.date).split(/[,،]/)[0] : "—";
+}
+const ST_LABEL = { ok: ["ok", "مكتمل", "check"], fail: ["err", "فشل", "alert"], cancel: ["warn", "ملغى", "x"] };
 function renderHistory() {
-    if (!historyEl) return;
-    historyEl.innerHTML = "";
-    if (!downloadHistory.length) {
-        historyEl.innerHTML = `<div style="padding:24px;text-align:center;color:#444;font-size:13px;">لا يوجد سجل تحميل</div>`;
+    renderStats();
+    $("clearHistory").disabled = !downloadHistory.length;
+    let list = [...downloadHistory].reverse();
+    if (histFilter === "ok") list = list.filter((h) => (h.st || "ok") === "ok");
+    if (histFilter === "bad") list = list.filter((h) => (h.st || "ok") !== "ok");
+    if (!list.length) {
+        historyEl.innerHTML = `<div class="empty-line">${downloadHistory.length ? "لا توجد عمليات في هذا الفلتر" : "لا يوجد سجل تحميل بعد"}</div>`;
         return;
     }
-    [...downloadHistory].reverse().forEach(item => {
-        const row = document.createElement("div");
-        row.className = "history-row";
-        row.innerHTML = `
-            <div style="display:flex;align-items:center;gap:12px;overflow:hidden;">
-                <div class="history-icon">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M8 2v8"/><path d="M5 7l3 3 3-3"/><path d="M3 13h10"/>
-                    </svg>
-                </div>
-                <div>
-                    <div class="history-name">${item.name}</div>
-                    <div class="history-date">${item.date}</div>
-                </div>
+    const idxOf = (it) => downloadHistory.indexOf(it);
+    historyEl.innerHTML = list.slice(0, 40).map((it) => {
+        const [tone, label, icon] = ST_LABEL[it.st || "ok"];
+        const bad = (it.st || "ok") !== "ok";
+        return `
+        <div class="history-row">
+            <div class="icon-tile sm ${tone}">${ic(icon, "sm")}</div>
+            <div class="grow" style="min-width:0">
+                <div class="history-name">${esc(it.name)}</div>
+                <div class="history-date">${esc(it.date)}</div>
             </div>
-            <div class="history-badge">✓ مكتمل</div>
-        `;
-        historyEl.appendChild(row);
-    });
+            ${bad && it.payload ? `<button class="btn btn-sm" data-retry="${idxOf(it)}">${ic("refresh", "sm")}إعادة المحاولة</button>` : ""}
+            <span class="pill ${tone} plain">${label}</span>
+        </div>`;
+    }).join("");
 }
-
-function saveHistory(name) {
-    downloadHistory.push({ name, date: new Date().toLocaleString("ar") });
-    localStorage.setItem("download_history", JSON.stringify(downloadHistory));
-    localStorage.setItem("last_update", new Date().toLocaleString());
+function addHistory(name, st = "ok", payload = null) {
+    const date = new Date().toLocaleString("ar", { numberingSystem: "latn" });
+    downloadHistory.push({ name, date, st, payload: st === "ok" ? null : payload });
+    try {
+        localStorage.setItem("download_history", JSON.stringify(downloadHistory.slice(-100)));
+        if (st === "ok") localStorage.setItem("last_update", date);
+    } catch {}
     renderHistory();
 }
+function logOnce(st) {
+    if (!cur || cur.logged) return;
+    cur.logged = true;
+    addHistory(cur.payload.name || "—", st, cur.payload);
+}
+$("histFilter").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    histFilter = b.dataset.f;
+    document.querySelectorAll("#histFilter button").forEach((x) => x.classList.toggle("on", x === b));
+    renderHistory();
+});
+$("clearHistory").addEventListener("click", async () => {
+    const ok = await askConfirm({ title: "مسح سجل التحميلات؟", message: "لن يؤثر هذا على الملفات المثبّتة.", confirmText: "مسح", danger: true });
+    if (!ok) return;
+    downloadHistory = [];
+    try { localStorage.removeItem("download_history"); } catch {}
+    renderHistory();
+});
+historyEl.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-retry]");
+    if (!b) return;
+    const it = downloadHistory[Number(b.dataset.retry)];
+    if (!it || !it.payload) return;
+    localStorage.setItem("pending_download", JSON.stringify(it.payload));
+    location.reload();
+});
+document.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => window.api.openPage(b.dataset.go)));
 
-/* ── REGISTER LISTENERS ── */
-function registerListeners(pendingName) {
-    window.api.onDownloadProgress(data => {
-        setProgress(data.percent, data.speed + " MB/s");
-    });
+/* ── listeners ── */
+function registerListeners() {
+    window.api.onDownloadProgress((d) => setProgress(d.percent, d.speed, d.downloaded, d.total));
 
-    window.api.onInstallStatus(data => {
-        applyStage(data.stage, null, null);
-        if (data.stage === "done") {
+    window.api.onInstallStatus((d) => {
+        applyStage(d.stage, null, null);
+        if (d.stage === "done") {
             stopPolling();
             setProgress(100, "مكتمل");
-            saveHistory(pendingName || localStorage.getItem("active_dl_name") || "—");
+            logOnce("ok");
             localStorage.removeItem("active_dl_name");
-            setTimeout(hideBox, 5000);
+            toast("اكتمل التثبيت", "success");
+            notifyOS("Ca Store", `اكتمل تثبيت ${cur ? cur.payload.name : ""}`);
+            if (!queueState.length) setTimeout(hideBox, 5000);
         }
-        if (data.stage === "error") {
-            stopPolling();
-            localStorage.removeItem("active_dl_name");
-        }
+        if (d.stage === "error") { stopPolling(); localStorage.removeItem("active_dl_name"); }
     });
 
-    // استقبال الحالة الكاملة لما تُفتح الصفحة من جديد
-    window.api.onDownloadStateSync(state => {
-        if (!state || (!state.running && (!state.stage || state.stage === "done" || state.stage === "error"))) return;
-        const name = localStorage.getItem("active_dl_name") || state.name || "جاري التحميل...";
-        showBox(name);
-        applyStage(state.stage, state.percent, state.speed);
+    window.api.onDownloadStateSync((s) => {
+        if (isIdle(s)) return;
+        showBox(localStorage.getItem("active_dl_name") || s.name || "جاري التحميل...");
+        if (s.paused) setPaused(true);
+        applyStage(s.stage, s.percent, s.speed, s.downloaded, s.total);
     });
 }
 
-/* ── MAIN FLOW ── */
-async function startPendingDownload() {
-    const raw = localStorage.getItem("pending_download");
+function fail(msg) {
+    stopPolling();
+    applyStage("error");
+    controls.classList.add("hidden");
+    if (msg) setStatus(msg, "err");
+    localStorage.removeItem("active_dl_name");
+    logOnce("fail");
+    toast("فشلت العملية، حاول مرة أخرى", "error");
+    notifyOS("Ca Store", "فشلت العملية");
+}
+function canceled() {
+    stopPolling();
+    setPaused(false);
+    controls.classList.add("hidden");
+    setStatus("تم إلغاء التحميل", "err");
+    localStorage.removeItem("active_dl_name");
+    logOnce("cancel");
+    toast("تم إلغاء التحميل", "info");
+}
 
-    if (raw) {
-        const pending = JSON.parse(raw);
-        localStorage.removeItem("pending_download");
-        localStorage.setItem("active_dl_name", pending.name || "جاري التحميل...");
+/* ── queue UI ── */
+let queueState = [];
+function renderQueue() {
+    const card = $("queueCard");
+    card.style.display = queueState.length > 1 ? "" : "none";
+    const label = { wait: "في الانتظار", active: "جاري التنفيذ", done: "اكتمل", fail: "فشل", cancel: "ملغى", skip: "تم التخطي" };
+    $("queueList").innerHTML = queueState.map((q, i) => `
+        <div class="q-row ${q.st}"><span class="q-n">${q.st === "done" ? ic("check", "sm") : i + 1}</span>
+        <span class="q-name">${esc(q.name)}</span><span class="st">${label[q.st]}</span>
+        ${q.st === "wait" ? `<button class="q-x" data-skip="${i}" title="إزالة من الطابور">${ic("x", "sm")}</button>` : ""}</div>`).join("");
+    const done = queueState.filter((q) => !["wait", "active"].includes(q.st)).length;
+    $("queueCount").textContent = `${done} / ${queueState.length}`;
+}
+$("queueList").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-skip]");
+    if (!b) return;
+    const q = queueState[Number(b.dataset.skip)];
+    if (q && q.st === "wait") { q.st = "skip"; renderQueue(); }
+});
+$("queueCancelAll").addEventListener("click", async () => {
+    const ok = await askConfirm({ title: "إلغاء كل الطابور؟", message: "سيُلغى التحميل الحالي وكل العناصر المنتظرة.", confirmText: "إلغاء الكل", danger: true });
+    if (!ok) return;
+    cancelAll = true;
+    queueState.forEach((q) => { if (q.st === "wait") q.st = "skip"; });
+    renderQueue();
+    if (cur) await doCancel();
+});
 
-        registerListeners(pending.name);
-        showBox(pending.name || "جاري التحميل...");
+function recordModVersion(p) {
+    if (p.type !== "mod" || !p.version) return;
+    try {
+        const m = JSON.parse(localStorage.getItem("mod_versions") || "{}");
+        m[p.fileName || p.productId] = p.version;
+        localStorage.setItem("mod_versions", JSON.stringify(m));
+    } catch {}
+}
 
+/* ── تشغيل عنصر واحد (مع إعادة محاولة تلقائية) ── */
+const MAX_RETRY = 2;
+async function runItem(pending) {
+    cur = { payload: pending, startedAt: Date.now(), logged: false, canceled: false };
+    setPaused(false);
+    localStorage.setItem("active_dl_name", pending.name || "جاري التحميل...");
+    showBox(pending.name || "جاري التحميل...");
+    resetCells(); setProgress(0, "0");
+    startTick();
+    try {
         if (pending.deleteFirst && pending.type === "pack") {
-            setStatus("جاري حذف الجرافيكس القديمة...", "#ffb347", "#ffb347");
+            setStatus("جاري أخذ نسخة احتياطية...", "warn");
             setStep("download");
+            try { await window.api.backupGraphics?.(); } catch (e) { console.error(e); }
+            setStatus("جاري حذف الجرافيكس القديمة...", "warn");
             await window.api.deleteGraphics();
         }
 
-        setStep("download");
-        setStatus("جاري التحميل...", "#7cb0ff", "#4f8cff");
-        setProgress(0, "0 MB/s");
-        startPolling();
-
-        const result = await window.api.startDownload(pending.url, pending.productId, pending.name);
-
-        if (!result.success) {
+        let result = null;
+        for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
+            setStep("download");
+            setStatus(attempt ? `إعادة المحاولة (${attempt}/${MAX_RETRY})...` : "جاري التحميل...", attempt ? "warn" : "info");
+            controls.classList.remove("hidden");
+            startPolling();
+            result = await window.api.startDownload(pending.url, pending.productId, pending.name);
+            if (result && (result.success || result.canceled)) break;
+            if (cur.canceled || attempt === MAX_RETRY) break;
             stopPolling();
-            applyStage("error");
-            localStorage.removeItem("active_dl_name");
-            return;
+            setStatus(`انقطع التحميل، سأعيد المحاولة خلال 3 ثوانٍ (${attempt + 1}/${MAX_RETRY})`, "warn");
+            await sleep(3000);
         }
+        controls.classList.add("hidden");
+        if (result && result.canceled) { canceled(); return "cancel"; }
+        if (!result || !result.success) { fail(); return "fail"; }
 
         setProgress(100, "—");
         applyStage("extracting");
 
         if (pending.type === "pack") {
-            const install = await window.api.runInstall(result.zipPath, pending.productId);
-            if (!install.success) {
-                stopPolling();
-                applyStage("error");
-                localStorage.removeItem("active_dl_name");
-            }
+            const inst = await window.api.runInstall(result.zipPath, pending.productId);
+            if (!inst || !inst.success) { fail(); return "fail"; }
+            return "ok";
         }
+        applyStage("copying");
+        const r = await window.api.downloadMod(pending.url, pending.fileName || pending.productId);
+        stopPolling();
+        if (r && r.success === false) { fail(); return "fail"; }
+        applyStage("done", 100, null);
+        setProgress(100, "مكتمل");
+        logOnce("ok");
+        recordModVersion(pending);
+        localStorage.removeItem("active_dl_name");
+        notifyOS("Ca Store", `اكتمل تثبيت ${pending.name}`);
+        return "ok";
+    } catch (e) {
+        console.error(e);
+        fail();
+        return "fail";
+    } finally { stopTick(); }
+}
 
-        if (pending.type === "mod") {
-            applyStage("copying");
-            await window.api.downloadMod(pending.url, pending.fileName || pending.productId);
-            stopPolling();
-            applyStage("done", 100, "مكتمل");
-            saveHistory(pending.name);
-            localStorage.removeItem("active_dl_name");
-            setTimeout(hideBox, 5000);
+/* ── main flow ── */
+async function startPendingDownload() {
+    let queue = null, pending = null;
+    try {
+        const q = localStorage.getItem("download_queue");
+        if (q) { queue = JSON.parse(q); localStorage.removeItem("download_queue"); }
+        const raw = localStorage.getItem("pending_download");
+        if (raw) { pending = JSON.parse(raw); localStorage.removeItem("pending_download"); }
+    } catch {}
+
+    registerListeners();
+
+    if (Array.isArray(queue) && queue.length) {
+        queueState = queue.map((q) => ({ name: q.name, st: "wait" }));
+        renderQueue();
+        for (let i = 0; i < queue.length; i++) {
+            if (queueState[i].st === "skip" || cancelAll) continue;
+            queueState[i].st = "active"; renderQueue();
+            const res = await runItem(queue[i]);
+            queueState[i].st = res === "ok" ? "done" : res; renderQueue();
+            if (i < queue.length - 1) await sleep(900);
         }
-
+        const okN = queueState.filter((q) => q.st === "done").length;
+        toast(`اكتمل ${okN} من ${queueState.length}`, okN === queueState.length ? "success" : "error");
+        setTimeout(hideBox, 5000);
         return;
     }
 
-    /* ── لا pending - تحقق من حالة شغّالة ── */
-    registerListeners(null);
-    const state = await window.api.getDownloadState();
-    const name  = localStorage.getItem("active_dl_name") || "جاري التحميل...";
-
-    if (state && (state.running || (state.stage && state.stage !== "done" && state.stage !== "error"))) {
-        showBox(name);
-        applyStage(state.stage, state.percent, state.speed);
-        startPolling();
-    } else {
-        hideBox();
+    if (pending) {
+        const res = await runItem(pending);
+        if (res !== "ok" || pending.type === "mod") setTimeout(hideBox, res === "ok" ? 5000 : 7000);
+        return;
     }
+
+    const s = await window.api.getDownloadState();
+    if (s && !isIdle(s)) {
+        showBox(localStorage.getItem("active_dl_name") || s.name || "جاري التحميل...");
+        if (s.paused) setPaused(true);
+        applyStage(s.stage, s.percent, s.speed, s.downloaded, s.total);
+        cur = { payload: { name: localStorage.getItem("active_dl_name") || s.name || "—" }, startedAt: Date.now(), logged: false, canceled: false };
+        startTick();
+        startPolling();
+    } else hideBox();
 }
 
-/* ── INIT ── */
 renderHistory();
 startPendingDownload();

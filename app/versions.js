@@ -1,41 +1,40 @@
-let packs = [];
+/* ==========================================================================
+   VERSIONS — باكات الجرافيكس
+   ========================================================================== */
+const { ic, esc, toast, confirm: askConfirm } = window.CA;
+
+const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
+const ADMIN_DISCORD_ID = "1336347875206234292";
 
 const packsContainer = document.getElementById("packsContainer");
-const notify         = document.getElementById("notify");
 
+let packs = [];
+let userPlans = [];
+let packRatings = {};
 let selectedPack = null;
-let userPlans    = [];
-let packRatings  = {};
-const imageTimers  = {};
-const imageIndexes = {};
 let currentRating = 0;
-let currentUser = null;
 let currentDiscordId = null;
-const ADMIN_DISCORD_ID = "1336347875206234292";
-const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
 
-// Version system state
-let selectedVersion = {};
-let versionDropdowns = {};
+const selectedVersion = {};   // packId -> version object
+const imageTimers = {};
+const imageIndexes = {};
 
-function isAdmin() {
-    return currentDiscordId === ADMIN_DISCORD_ID;
+const isAdmin = () => currentDiscordId === ADMIN_DISCORD_ID;
+const canDeleteComment = (id) => isAdmin() || id === currentDiscordId;
+const showNotify = (msg, type = "success") => toast(msg, type);
+
+function fmtDate(d) {
+    const t = new Date(d);
+    if (isNaN(t)) return esc(d || "");
+    return t.toLocaleDateString("ar", { year: "numeric", month: "short", day: "numeric", numberingSystem: "latn" });
 }
 
-function canDeleteComment(commentDiscordId) {
-    // Allow deletion if user is admin or if it's their own comment
-    return isAdmin() || commentDiscordId === currentDiscordId;
-}
-
-/* ── FETCH PACKS FROM SERVER ── */
+/* ── DATA ── */
 async function fetchPacksFromServer() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/packs`);
         const data = await res.json();
-        if (data.success) {
-            packs = data.packs;
-            return true;
-        }
+        if (data.success) { packs = data.packs || []; return true; }
         return false;
     } catch (err) {
         console.error("Failed to fetch packs:", err);
@@ -43,681 +42,518 @@ async function fetchPacksFromServer() {
     }
 }
 
-/* ── AUTH ── */
 async function checkAuth() {
     const r = await window.api.auth.check();
     if (!r.success) { window.api.openPage("login.html"); return false; }
     userPlans = r.plans || [];
-    currentUser = r.username || null;
     currentDiscordId = r.discordId || null;
     return true;
 }
 
-/* ── NOTIFY ── */
-function showNotify(msg, type = "success") {
-    notify.textContent = msg;
-    notify.className = `notification show ${type}`;
-    setTimeout(() => notify.classList.remove("show"), 3500);
-}
-
-/* ── RATINGS ── */
 async function loadRatings() {
-    const r = await window.api.ratings.get();
-    if (r.success) {
-        packRatings = r.ratings;
-    }
+    try {
+        const r = await window.api.ratings.get();
+        if (r.success) packRatings = r.ratings || {};
+    } catch {}
 }
 
 function getPackRating(packId) {
-    const data = packRatings[packId];
-    if (!data || data.totalRatings === 0) {
-        return { average: 0, count: 0 };
-    }
-    return { average: parseFloat(data.averageRating), count: data.totalRatings };
+    const d = packRatings[packId];
+    if (!d || !d.totalRatings) return { average: 0, count: 0 };
+    return { average: parseFloat(d.averageRating) || 0, count: d.totalRatings };
 }
 
-function renderStars(rating) {
-    const fullStars = Math.floor(rating);
-    const hasHalf = rating % 1 >= 0.5;
-    let stars = '';
-    
-    for (let i = 0; i < 5; i++) {
-        if (i < fullStars) {
-            stars += `<svg class="rating-star" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`;
-        } else {
-            stars += `<svg class="rating-star empty" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`;
-        }
-    }
-    return stars;
+function starsHtml(rating) {
+    const full = Math.round(rating);
+    let out = "";
+    for (let i = 0; i < 5; i++) out += `<svg class="i sm star ${i < full ? "on" : ""}" viewBox="0 0 24 24"><use href="#i-star"/></svg>`;
+    return out;
 }
 
-function openRatingPopup(packId) {
-    selectedPack = packs.find(p => p.id === packId);
-    if (!selectedPack) return;
-
-    const preview = document.getElementById("ratingPackPreview");
-    if (preview) {
-        preview.innerHTML = `
-            <img class="manage-pack-img" src="${selectedPack.images[0]}" />
-            <div>
-                <div class="manage-pack-name">${selectedPack.name}</div>
-                <div class="manage-pack-sub">Graphics Pack • Level ${selectedPack.level}</div>
-            </div>
-        `;
-    }
-
-    // Reset form
-    currentRating = 0;
-    document.getElementById("ratingComment").value = "";
-    updateStarInputs(0);
-
-    // Load existing comments
-    loadPackComments(packId);
-
-    document.getElementById("ratingPopup").classList.remove("hidden");
-}
-
-async function loadPackComments(packId) {
-    const r = await window.api.ratings.getPack(packId);
-    const commentsList = document.getElementById("commentsList");
-    const ratingsList = document.getElementById("ratingsList");
-
-    // عرض التعليقات
-    if (r.success && r.comments && r.comments.length > 0) {
-        commentsList.innerHTML = r.comments.map((c) => `
-            <div class="comment-item">
-                <div class="comment-header">
-                    <div class="comment-author">${c.username}</div>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <div class="comment-date">${new Date(c.created_at).toLocaleDateString('ar-SA')}</div>
-                        ${canDeleteComment(c.discord_id) ? `<button class="delete-comment-btn" onclick="deleteComment('${packId}', ${c.id})">حذف</button>` : ''}
-                    </div>
-                </div>
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-                    <div class="rating-stars" style="transform:scale(0.8);transform-origin:left;">${renderStars(c.rating || 0)}</div>
-                    <span style="font-size:12px;color:rgba(255,255,255,0.4);">${c.rating || 0}/5</span>
-                </div>
-                <div class="comment-text">${c.comment}</div>
-            </div>
-        `).join('');
-    } else {
-        commentsList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);font-size:13px;padding:20px;">لا توجد تعليقات بعد</div>';
-    }
-
-    // عرض التقييمات (للأدمن فقط)
-    if (isAdmin() && r.success && r.ratings && r.ratings.length > 0) {
-        ratingsList.innerHTML = r.ratings.map((rating) => `
-            <div class="comment-item">
-                <div class="comment-header">
-                    <div class="comment-author">${rating.username}</div>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <div class="comment-date">${new Date(rating.created_at).toLocaleDateString('ar-SA')}</div>
-                        <button class="delete-comment-btn" onclick="deleteRating('${packId}', ${rating.id})">حذف التقييم</button>
-                    </div>
-                </div>
-                <div style="display:flex;align-items:center;gap:6px;">
-                    <div class="rating-stars" style="transform:scale(0.8);transform-origin:left;">${renderStars(rating.rating)}</div>
-                    <span style="font-size:12px;color:rgba(255,255,255,0.4);">${rating.rating}/5</span>
-                </div>
-            </div>
-        `).join('');
-    } else if (isAdmin()) {
-        ratingsList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);font-size:13px;padding:20px;">لا توجد تقييمات بعد</div>';
-    }
-}
-
-async function deleteComment(packId, commentId) {
-    if (!confirm("هل أنت متأكد من حذف هذا التعليق؟")) return;
-
-    const r = await window.api.ratings.deleteComment(commentId, currentDiscordId);
-    if (r.success) {
-        showNotify("✅ تم حذف التعليق بنجاح");
-        await loadRatings();
-        loadPacks();
-        loadPackComments(packId);
-    } else {
-        showNotify(`❌ ${r.message}`, "error");
-    }
-}
-
-async function deleteRating(packId, ratingId) {
-    if (!confirm("هل أنت متأكد من حذف هذا التقييم؟")) return;
-
-    const r = await window.api.ratings.deleteRating(ratingId, currentDiscordId);
-    if (r.success) {
-                showNotify("✅ تم حذف التقييم بنجاح");
-        await loadRatings();
-        loadPacks();
-        loadPackComments(packId);
-    } else {
-        showNotify(`❌ ${r.message}`, "error");
-    }
-}
-
-function updateStarInputs(rating) {
-    const stars = document.querySelectorAll('.rating-star-input');
-    stars.forEach((star, index) => {
-        if (index < rating) {
-            star.classList.add('active');
-        } else {
-            star.classList.remove('active');
-        }
-    });
-    currentRating = rating;
-}
-
-async function submitRating() {
-    if (!selectedPack || currentRating === 0) {
-        showNotify("الرجاء اختيار تقييم", "error");
-        return;
-    }
-
-    const comment = document.getElementById("ratingComment").value;
-    const authResult = await window.api.auth.check();
-    const username = authResult.success ? (authResult.username || "Anonymous") : "Anonymous";
-    const discordId = authResult.success ? authResult.discordId : null;
-
-    const r = await window.api.ratings.submit(selectedPack.id, currentRating, comment, username, discordId);
-    
-    if (r.success) {
-        showNotify("✅ تم إرسال تقييمك بنجاح!");
-        document.getElementById("ratingPopup").classList.add("hidden");
-        
-        // Reload ratings and update UI
-        await loadRatings();
-        loadPacks();
-    } else {
-        showNotify("❌ فشل إرسال التقييم", "error");
-    }
-}
-
-/* ── SLIDER ── */
-function startSlider(packId, images, imgEl) {
-    if (images.length <= 1) return;
-    imageIndexes[packId] = 0;
-    if (imageTimers[packId]) clearInterval(imageTimers[packId]);
-
-    imageTimers[packId] = setInterval(() => {
-        imageIndexes[packId] = (imageIndexes[packId] + 1) % images.length;
-        imgEl.style.opacity = "0";
-        setTimeout(() => {
-            imgEl.src = images[imageIndexes[packId]];
-            imgEl.style.opacity = "1";
-            images.forEach((_, i) => {
-                const d = document.getElementById(`dot_${packId}_${i}`);
-                if (d) d.className = "pack-dot" + (i === imageIndexes[packId] ? " active" : "");
-            });
-        }, 600);
-    }, 3000);
-}
-
-/* ── VERSION SYSTEM FUNCTIONS ── */
+/* ── VERSIONS ── */
 function getPackVersions(pack) {
-    // Use versions from server data
-    return pack.versions || [
-        {
-            version: "1.0",
-            date: "2023-09-10",
-            latest: true,
-            size: "380 MB",
-            features: ["الإصدار الأولي", "جرافيكس أساسي"],
-            changelog: "الإصدار الأولي من باك الجرافيكس",
-            url: pack.url
-        }
-    ];
+    if (Array.isArray(pack.versions) && pack.versions.length) return pack.versions;
+    return [{
+        version: "1.0", date: "—", latest: true, size: "—",
+        features: [], changelog: "الإصدار الأولي من الباك", url: pack.url
+    }];
 }
-
-function toggleVersionDropdown(packId) {
-    const dropdown = document.getElementById(`versionDropdown_${packId}`);
-    const selector = document.getElementById(`versionSelector_${packId}`);
-
-    if (dropdown.classList.contains('show')) {
-        dropdown.classList.remove('show');
-        selector.classList.remove('open');
-    } else {
-        // Close all other dropdowns
-        Object.keys(versionDropdowns).forEach(id => {
-            if (id !== packId) {
-                const d = document.getElementById(`versionDropdown_${id}`);
-                const s = document.getElementById(`versionSelector_${id}`);
-                if (d) d.classList.remove('show');
-                if (s) s.classList.remove('open');
-            }
-        });
-
-        dropdown.classList.add('show');
-        selector.classList.add('open');
-    }
+function currentVersionOf(pack) {
+    return selectedVersion[pack.id] || getPackVersions(pack)[0];
 }
-
-function selectVersion(packId, version) {
-    selectedVersion[packId] = version;
-
-    // Update UI
-    const selectorCurrent = document.getElementById(`versionSelectorCurrent_${packId}`);
-    if (selectorCurrent) {
-        selectorCurrent.textContent = `v${version.version}`;
-    }
-
-    // Update version badge in card corner
-    const versionBadge = document.querySelector(`.version-badge[data-pack="${packId}"]`);
-    if (versionBadge) {
-        versionBadge.innerHTML = `v${version.version}${version.latest ? '<span class="new-tag">جديد</span>' : ''}`;
-        if (version.latest) {
-            versionBadge.classList.add('new');
-        } else {
-            versionBadge.classList.remove('new');
-        }
-    }
-
-    // Update dropdown options
-    const dropdown = document.getElementById(`versionDropdown_${packId}`);
-    if (dropdown) {
-        dropdown.querySelectorAll('.version-option').forEach(opt => {
-            opt.classList.remove('active');
-            if (opt.dataset.version === version.version) {
-                opt.classList.add('active');
-            }
-        });
-    }
-
-    // Update timeline dots
-    const pack = packs.find(p => p.id === packId);
-    const versions = getPackVersions(pack);
-    const timelineDots = document.querySelectorAll(`.version-dot[data-pack="${packId}"]`);
-    timelineDots.forEach((dot, index) => {
-        dot.classList.remove('active');
-        if (versions[index].version === version.version) {
-            dot.classList.add('active');
-        }
-    });
-
-    // Update version info (size, date)
-    const versionInfo = document.querySelector(`.version-info[data-pack="${packId}"]`);
-    if (versionInfo) {
-        const sizeItem = versionInfo.querySelector('.version-info-item:nth-child(1)');
-        const dateItem = versionInfo.querySelector('.version-info-item:nth-child(2)');
-        if (sizeItem) {
-            sizeItem.innerHTML = `
-                <svg fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                ${version.size}
-            `;
-        }
-        if (dateItem) {
-            dateItem.innerHTML = `
-                <svg fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>
-                ${version.date}
-            `;
-        }
-    }
-
-    // Update install button text
-    const installBtn = document.querySelector(`.pack-install-btn[data-pack="${packId}"]`);
-    if (installBtn) {
-        installBtn.textContent = `تثبيت v${version.version}`;
-    }
-
-    // Close dropdown
-    toggleVersionDropdown(packId);
-}
-
-function openVersionDetails(packId) {
-    const pack = packs.find(p => p.id === packId);
-    if (!pack) return;
-
-    const versions = getPackVersions(pack);
-
-    // Update panel content
-    document.getElementById('versionDetailsTitle').textContent = pack.name;
-    document.getElementById('versionDetailsSubtitle').textContent = `تاريخ الإصدارات والتحديثات`;
-
-    // Render changelog
-    const changelogList = document.getElementById('changelogList');
-    changelogList.innerHTML = versions.map(v => `
-        <div class="changelog-item">
-            <div class="changelog-item-header">
-                <div class="changelog-version">v${v.version} ${v.latest ? '<span class="version-option-badge latest">الأحدث</span>' : ''}</div>
-                <div class="changelog-date">${v.date}</div>
-            </div>
-            <div class="changelog-description">${v.changelog}</div>
-            <div class="changelog-features">
-                ${v.features.map(f => `<div class="changelog-feature">${f}</div>`).join('')}
-            </div>
-        </div>
-    `).join('');
-
-    // Render comparison table
-    const comparisonTable = document.getElementById('comparisonTable');
-    comparisonTable.innerHTML = `
-        <tr class="comparison-row">
-            <td class="comparison-cell feature">حجم الملف</td>
-            ${versions.map(v => `<td class="comparison-cell">${v.size}</td>`).join('')}
-        </tr>
-        <tr class="comparison-row">
-            <td class="comparison-cell feature">تاريخ الإصدار</td>
-            ${versions.map(v => `<td class="comparison-cell">${v.date}</td>`).join('')}
-        </tr>
-        <tr class="comparison-row">
-            <td class="comparison-cell feature">الأداء</td>
-            ${versions.map((v, i) => `<td class="comparison-cell ${i === 0 ? 'highlight' : ''}">${i === 0 ? 'محسّن' : 'عادي'}</td>`).join('')}
-        </tr>
-        <tr class="comparison-row">
-            <td class="comparison-cell feature">الإضاءة</td>
-            ${versions.map((v, i) => `<td class="comparison-cell ${i === 0 ? 'highlight' : ''}">${i === 0 ? 'محسّنة' : 'أساسية'}</td>`).join('')}
-        </tr>
-    `;
-
-    // Show panel
-    document.getElementById('versionDetailsOverlay').classList.add('open');
-    document.getElementById('versionDetailsPanel').classList.add('open');
-}
-
-function closeVersionDetails() {
-    document.getElementById('versionDetailsOverlay').classList.remove('open');
-    document.getElementById('versionDetailsPanel').classList.remove('open');
-}
-
-// Close panel when clicking overlay
-document.getElementById('versionDetailsOverlay').addEventListener('click', closeVersionDetails);
 
 /* ── CARD ── */
-function createPackCard(pack, unlocked) {
-    const card = document.createElement("div");
-    card.className = "pack-card-v3" + (unlocked ? "" : " locked");
+let packFilter = "all";
+let packSort = "default";
+let packFavs = new Set();
+try { packFavs = new Set(JSON.parse(localStorage.getItem("fav_packs") || "[]")); packSort = localStorage.getItem("packs_sort") || "default"; } catch {}
+const saveFavs = () => { try { localStorage.setItem("fav_packs", JSON.stringify([...packFavs])); } catch {} };
+const MAX_CHIPS = 4;
 
-    const rating = getPackRating(pack.id);
-    const starsHtml = renderStars(rating.average);
+function createPackCard(pack, unlocked) {
+    const card = document.createElement("article");
+    card.className = "pk" + (unlocked ? "" : " locked");
+    card.dataset.pack = pack.id;
+
     const versions = getPackVersions(pack);
-    const currentVer = selectedVersion[pack.id] || versions[0];
+    const ver = currentVersionOf(pack);
+    const rating = getPackRating(pack.id);
+    const images = pack.images || [];
+    const shown = versions.slice(0, MAX_CHIPS);
+    if (!shown.includes(ver)) shown[shown.length - 1] = ver;
+    const notes = (ver.features && ver.features.length) ? `<ul>${ver.features.slice(0, 4).map((f) => `<li>${esc(f)}</li>`).join("")}</ul>`
+        : ver.changelog ? `<p>${esc(ver.changelog)}</p>` : "";
 
     card.innerHTML = `
-        <div class="pack-img-wrap">
-            <img id="packImg_${pack.id}" src="${pack.images[0]}"
-                style="transition:transform 0.4s ease,opacity 0.6s ease;" />
-            <div class="pack-img-gradient"></div>
-            
-            <div class="version-badge ${currentVer.latest ? 'new' : ''}" data-pack="${pack.id}">
-                v${currentVer.version}
-                ${currentVer.latest ? '<span class="new-tag">جديد</span>' : ''}
-            </div>
-            
-            ${unlocked ? `
-            <div class="version-timeline">
-                <span class="version-timeline-label">الإصدارات</span>
-                <div class="version-dots">
-                    ${versions.map((v, i) => `
-                        <div class="version-dot ${v.version === currentVer.version ? 'active' : ''} ${v.latest ? 'latest' : ''}"
-                             data-pack="${pack.id}"
-                             data-version="${v.version}"
-                             onclick="selectVersion('${pack.id}', ${JSON.stringify(v).replace(/"/g, '&quot;')})">
-                        </div>
-                    `).join('')}
-                </div>
-                <span class="version-count">${versions.length}</span>
-            </div>
-            ` : ''}
-            
-            ${!unlocked ? `
-            <div class="pack-lock-cover">
-                <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <rect x="7" y="13" width="14" height="10" rx="2"></rect>
-                    <path d="M11 13v-3a4 4 0 0 1 8 0v3"></path>
-                </svg>
-                هذا الباك مو في نسختك
-            </div>` : ""}
+        <div class="pk-media">
+            ${images[0] ? `<img src="${esc(images[0])}" alt="${esc(pack.name)}">` : `<div class="pk-media-empty">${ic("grid", "xl")}</div>`}
+            <div class="pk-corner">${unlocked ? `<button class="fav-btn${packFavs.has(pack.id) ? " on" : ""}" data-act="fav" title="مفضلة">${ic("heart", "sm")}</button>` : ""}<span class="chip ${ver.latest ? "upd" : ""}">v${esc(ver.version)}${ver.latest ? " · الأحدث" : ""}</span></div>
+            ${unlocked && images.length > 1 ? `<div class="pk-thumbs">${images.slice(0, 5).map((src, i) => `
+                <button class="pk-thumb ${i === 0 ? "active" : ""}" data-act="thumb" data-index="${i}"><img src="${esc(src)}" alt=""></button>`).join("")}</div>` : ""}
+            ${!unlocked ? `<div class="pack-lock">${ic("lock", "xl")}<span>هذا الباك غير متاح في اشتراكك</span></div>` : ""}
         </div>
-        <div class="pack-body-v3">
-            <div class="pack-header">
+
+        <div class="pk-b">
+            <div class="pk-t">
                 <div>
-                    <div class="pack-name-v3">${pack.name}</div>
-                    <div class="pack-category">Graphics Pack • Level ${pack.level}</div>
+                    <span class="chip ${unlocked ? "ok" : "warn"}">${ic(unlocked ? "check" : "lock")}${unlocked ? "مفتوح لحسابك" : "مقفل"}</span>
+                    <div class="pk-name">${esc(pack.name)}</div>
                 </div>
-                ${unlocked ? `
-                <div class="version-selector" id="versionSelector_${pack.id}" onclick="toggleVersionDropdown('${pack.id}')">
-                    <span class="version-selector-current" id="versionSelectorCurrent_${pack.id}">v${currentVer.version}</span>
-                    <svg class="version-selector-arrow" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M6 9l6 6 6-6"></path>
-                    </svg>
-                    <div class="version-dropdown" id="versionDropdown_${pack.id}">
-                        ${versions.map(v => `
-                            <div class="version-option ${v.version === currentVer.version ? 'active' : ''}" 
-                                 data-version="${v.version}"
-                                 onclick="event.stopPropagation(); selectVersion('${pack.id}', ${JSON.stringify(v).replace(/"/g, '&quot;')})">
-                                <div class="version-option-left">
-                                    <span class="version-option-number">v${v.version}</span>
-                                    <span class="version-option-date">${v.date}</span>
-                                </div>
-                                ${v.latest ? '<span class="version-option-badge latest">Latest</span>' : ''}
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-                ` : ''}
+                <button class="pk-rate" data-act="${unlocked ? "rate" : "none"}" title="${unlocked ? "قيّم هذا الباك" : ""}">
+                    <div class="stars">${starsHtml(rating.average)}</div>
+                    <span class="rating-count">${rating.count > 0 ? `${rating.average.toFixed(1)} · ${rating.count} تقييم` : (unlocked ? "قيّم الآن" : "لا تقييمات")}</span>
+                </button>
             </div>
-            
+
+            <div class="pk-meta">
+                ${unlocked ? `<span>${ic("download", "sm")}${esc(ver.size || "—")}</span><span>${ic("clock", "sm")}${esc(ver.date || "—")}</span>` : ""}
+                <span>${ic("gauge", "sm")}المستوى ${esc(pack.level)}</span>
+            </div>
+
             ${unlocked ? `
-            <div class="version-info" data-pack="${pack.id}">
-                <div class="version-info-item">
-                    <svg fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    ${currentVer.size}
-                </div>
-                <div class="version-info-item">
-                    <svg fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                    ${currentVer.date}
-                </div>
-                <div class="version-info-item" style="cursor:pointer;" onclick="openVersionDetails('${pack.id}')">
-                    <svg fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                    </svg>
-                    عرض التاريخ
-                </div>
+            <div class="vers">
+                ${shown.map((v) => `<button class="ver-chip ${v === ver ? "on" : ""}" data-act="pick" data-index="${versions.indexOf(v)}">v${esc(v.version)}${v.latest ? "<em>الأحدث</em>" : ""}</button>`).join("")}
+                ${versions.length > MAX_CHIPS ? `<button class="ver-chip more" data-act="details">${ic("history", "sm")}كل الإصدارات (${versions.length})</button>` : ""}
             </div>
-            ` : ''}
-            
-            <div class="pack-rating">
-                <div class="rating-stars">${starsHtml}</div>
-                <span class="rating-count">${rating.count > 0 ? `(${rating.count})` : ''}</span>
-                ${unlocked ? `<button class="rate-btn" onclick="openRatingPopup('${pack.id}')">
-                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                    </svg>
-                    قيّم
-                </button>` : ''}
-            </div>
-            
-            <div class="pack-actions">
+            ${notes ? `<div class="new-box"><h4>ما الجديد في v${esc(ver.version)}</h4>${notes}</div>` : ""}` : ""}
+
+            <div class="pk-act">
                 ${unlocked ? `
-                <button class="pack-install-btn" data-pack="${pack.id}" onclick="downloadPack('${pack.id}',this)">
-                    تثبيت v${currentVer.version}
-                </button>
-                <button class="pack-manage-btn" onclick="openPackSettings('${pack.id}')" title="Manage">
-                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="7.5" cy="7.5" r="2.5"/>
-                        <path d="M7.5 1v1.5M7.5 11v1.5M1 7.5h1.5M11 7.5h1.5"/>
-                    </svg>
-                </button>
-                ` : `
-                <button class="pack-install-btn" style="opacity:0.3;cursor:not-allowed;background:rgba(255,255,255,0.08);" disabled>مقفل</button>
-                `}
+                    <button class="cta" data-act="install">${ic("download")}تثبيت v${esc(ver.version)}</button>
+                    <button class="sq" data-act="details" title="سجل الإصدارات">${ic("history")}</button>
+                    <button class="sq" data-act="manage" title="خيارات">${ic("sliders")}</button>
+                ` : `<button class="cta ghost" disabled>${ic("lock")}غير متاح في اشتراكك</button>`}
             </div>
-        </div>
-    `;
+        </div>`;
+
+    if (unlocked && images.length > 1) startSlider(pack.id, images, card);
     return card;
 }
 
-/* ── LOAD PACKS ── */
-function loadPacks() {
-    Object.keys(imageTimers).forEach(id => clearInterval(imageTimers[id]));
-    packsContainer.innerHTML = "";
-    let count = 0;
-
-    packs.forEach(pack => {
-        const unlocked = userPlans.includes(pack.plan);
-        if (unlocked) count++;
-        packsContainer.appendChild(createPackCard(pack, unlocked));
-
-        if (unlocked && pack.images.length > 1) {
-            const img = document.getElementById(`packImg_${pack.id}`);
-            if (img) startSlider(pack.id, pack.images, img);
-        }
-    });
-
-    const el = document.getElementById("installedPacks");
-    if (el) el.textContent = count;
-
-    const badge = document.getElementById("currentPlanBadge");
-    if (badge) badge.textContent = userPlans.join(" + ") || "—";
+function showImage(packId, images, card, i) {
+    const img = card.querySelector(".pk-media > img");
+    if (!img) return;
+    imageIndexes[packId] = i;
+    img.style.opacity = "0";
+    setTimeout(() => {
+        img.src = images[i];
+        img.style.opacity = "1";
+        card.querySelectorAll(".pk-thumb").forEach((t, k) => t.classList.toggle("active", k === i));
+    }, 260);
+}
+function startSlider(packId, images, card) {
+    clearInterval(imageTimers[packId]);
+    imageIndexes[packId] = 0;
+    const n = Math.min(images.length, 5);
+    imageTimers[packId] = setInterval(() => {
+        if (!card.isConnected) return clearInterval(imageTimers[packId]);
+        showImage(packId, images, card, (imageIndexes[packId] + 1) % n);
+    }, 4200);
 }
 
-/* ── DOWNLOAD ── */
-async function downloadPack(id, btn) {
-    const pack = packs.find(p => p.id === id);
-    if (!pack) return;
-    if (btn) { btn.disabled = true; btn.textContent = "جاري..."; }
+function refreshCard(packId) {
+    const pack = packs.find((p) => p.id === packId);
+    const old = packsContainer.querySelector(`[data-pack="${CSS.escape(packId)}"].pk`);
+    if (!pack || !old) return;
+    clearInterval(imageTimers[packId]);
+    old.replaceWith(createPackCard(pack, userPlans.includes(pack.plan)));
+}
 
-    // Get selected version URL
-    const currentVer = selectedVersion[id] || getPackVersions(pack)[0];
-    const downloadUrl = currentVer.url || pack.url;
+function loadPacks() {
+    Object.keys(imageTimers).forEach((id) => clearInterval(imageTimers[id]));
+    packsContainer.innerHTML = "";
+
+    if (!packs.length) {
+        packsContainer.innerHTML = `<div class="empty">
+            <div class="icon-tile">${ic("grid", "lg")}</div><h3>لا توجد باكات حالياً</h3><p>سيتم إضافة باكات جديدة قريباً.</p></div>`;
+    }
+
+    let unlockedCount = 0, shown = 0;
+    // المفتوحة أولاً
+    const dateOf = (p) => new Date(getPackVersions(p)[0].date).getTime() || 0;
+    const sorters = {
+        default: () => 0,
+        rating: (a, b) => getPackRating(b.id).average - getPackRating(a.id).average,
+        newest: (a, b) => dateOf(b) - dateOf(a),
+        level: (a, b) => (Number(b.level) || 0) - (Number(a.level) || 0)
+    };
+    const ordered = [...packs].sort((a, b) => (userPlans.includes(b.plan) - userPlans.includes(a.plan)) || (packFavs.has(b.id) - packFavs.has(a.id)) || sorters[packSort](a, b));
+    ordered.forEach((pack) => {
+        const unlocked = userPlans.includes(pack.plan);
+        if (unlocked) unlockedCount++;
+        if ((packFilter === "open" && !unlocked) || (packFilter === "locked" && unlocked) || (packFilter === "fav" && !packFavs.has(pack.id))) return;
+        shown++;
+        packsContainer.appendChild(createPackCard(pack, unlocked));
+    });
+    if (packs.length && !shown) packsContainer.innerHTML = `<div class="empty"><div class="icon-tile">${ic("search", "lg")}</div><h3>لا توجد باكات في هذا الفلتر</h3></div>`;
+
+    document.getElementById("installedPacks").textContent = unlockedCount;
+    document.getElementById("totalPacks").textContent = packs.length;
+    document.getElementById("currentPlanBadge").textContent = userPlans.join(" + ") || "بدون اشتراك";
+}
+
+const sortSel = document.getElementById("packSort");
+sortSel.value = packSort;
+sortSel.addEventListener("change", () => { packSort = sortSel.value; try { localStorage.setItem("packs_sort", packSort); } catch {} loadPacks(); });
+document.getElementById("packFilter").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    packFilter = b.dataset.f;
+    document.querySelectorAll("#packFilter button").forEach((x) => x.classList.toggle("on", x === b));
+    loadPacks();
+});
+
+/* ── CARD EVENTS ── */
+packsContainer.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-act]");
+    const card = e.target.closest("[data-pack]");
+    if (!el || !card) return;
+    const id = card.dataset.pack;
+    const pack = packs.find((p) => p.id === id);
+    if (!pack) return;
+
+    switch (el.dataset.act) {
+        case "pick":
+            selectedVersion[id] = getPackVersions(pack)[Number(el.dataset.index)];
+            refreshCard(id);
+            break;
+        case "thumb": {
+            const imgs = (pack.images || []).slice(0, 5);
+            showImage(id, imgs, card, Number(el.dataset.index));
+            startSlider(id, pack.images || [], card);
+            imageIndexes[id] = Number(el.dataset.index);
+            break;
+        }
+        case "fav":
+            packFavs.has(id) ? packFavs.delete(id) : packFavs.add(id);
+            saveFavs();
+            loadPacks();
+            break;
+        case "details": openVersionDetails(id); break;
+        case "rate": openRatingPopup(id); break;
+        case "install": startInstall(pack); break;
+        case "manage": openPackSettings(id); break;
+    }
+});
+
+/* ── استعادة النسخة الاحتياطية ── */
+async function refreshBackupBtn() {
+    const btn = document.getElementById("restoreBackupBtn");
+    try {
+        const r = await window.api.backupInfo();
+        btn.disabled = !(r && r.exists);
+        btn.title = r && r.exists ? `نسخة بتاريخ ${fmtDate(r.date)}` : "لا توجد نسخة احتياطية بعد (تُنشأ تلقائياً قبل أي تثبيت)";
+    } catch { btn.disabled = true; }
+}
+document.getElementById("restoreBackupBtn").addEventListener("click", async () => {
+    const ok = await askConfirm({
+        title: "استعادة النسخة الاحتياطية؟",
+        message: "سيتم استبدال الجرافيكس الحالية بآخر نسخة احتياطية أُخذت قبل التثبيت.",
+        details: ["حذف مجلدات citizen و plugins و mods الحالية", "إعادة المجلدات المحفوظة"], confirmText: "استعادة"
+    });
+    if (!ok) return;
+    const btn = document.getElementById("restoreBackupBtn");
+    btn.disabled = true;
+    try {
+        const r = await window.api.restoreGraphics();
+        showNotify(r && r.success ? "تمت استعادة النسخة الاحتياطية" : ((r && r.message) || "فشلت الاستعادة"), r && r.success ? "success" : "error");
+    } catch { showNotify("فشلت الاستعادة", "error"); }
+    refreshBackupBtn();
+});
+
+/* ── INSTALL ── */
+async function startInstall(pack) {
+    const fivem = await window.api.getFiveMPath();
+    if (!fivem.success) {
+        showNotify("حدّد مسار FiveM من صفحة الإعدادات أولاً", "error");
+        return;
+    }
+    const ver = currentVersionOf(pack);
+    const ok = await askConfirm({
+        title: `تثبيت ${pack.name} v${ver.version}`,
+        message: "سيتم استبدال الجرافيكس الحالية بهذا الإصدار، وتؤخذ نسخة احتياطية تلقائياً قبل ذلك.",
+        details: ["نسخة احتياطية من الجرافيكس الحالية", "حذف مجلدات citizen و plugins و mods الحالية", "تحميل الإصدار المحدد وفك ضغطه", "نسخ الملفات وحمايتها داخل FiveM"],
+        confirmText: "ابدأ التثبيت"
+    });
+    if (!ok) return;
 
     localStorage.setItem("pending_download", JSON.stringify({
-        url: downloadUrl,
-        name: `${pack.name} v${currentVer.version}`,
+        url: ver.url || pack.url,
+        name: `${pack.name} v${ver.version}`,
         productId: pack.id,
         type: "pack",
         deleteFirst: true,
-        version: currentVer.version
+        version: ver.version
     }));
     window.api.openPage("downloads.html");
 }
 
-/* ── PACK SETTINGS POPUP ── */
-function openPackSettings(id) {
-    selectedPack = packs.find(p => p.id === id);
-    if (!selectedPack) return;
+/* ── VERSION DETAILS PANEL ── */
+function openVersionDetails(packId) {
+    const pack = packs.find((p) => p.id === packId);
+    if (!pack) return;
+    const versions = getPackVersions(pack);
 
-    const preview = document.getElementById("managePackPreview");
-    if (preview) {
-        preview.innerHTML = `
-            <img class="manage-pack-img" src="${selectedPack.images[0]}" />
-            <div>
-                <div class="manage-pack-name">${selectedPack.name}</div>
-                <div class="manage-pack-sub">Graphics Pack • Level ${selectedPack.level}</div>
+    document.getElementById("versionDetailsTitle").textContent = pack.name;
+    document.getElementById("versionDetailsSubtitle").textContent = "تاريخ الإصدارات والتحديثات";
+
+    document.getElementById("changelogList").innerHTML = versions.map((v) => `
+        <div class="changelog-item">
+            <div class="changelog-top">
+                <span class="changelog-ver">v${esc(v.version)} ${v.latest ? '<span class="pill ok plain">الأحدث</span>' : ""}</span>
+                <span class="changelog-date">${esc(v.date || "")}</span>
             </div>
-        `;
-    }
-    document.getElementById("packPopup").classList.remove("hidden");
+            ${v.changelog ? `<p class="changelog-desc">${esc(v.changelog)}</p>` : ""}
+            ${(v.features || []).length ? `<ul class="changelog-features">${v.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
+        </div>`).join("");
+
+    document.getElementById("comparisonTable").innerHTML = `
+        <thead><tr><th></th>${versions.map((v) => `<th>v${esc(v.version)}</th>`).join("")}</tr></thead>
+        <tbody>
+            <tr><td>الحجم</td>${versions.map((v) => `<td>${esc(v.size || "—")}</td>`).join("")}</tr>
+            <tr><td>تاريخ الإصدار</td>${versions.map((v) => `<td>${esc(v.date || "—")}</td>`).join("")}</tr>
+            <tr><td>الحالة</td>${versions.map((v) => `<td class="${v.latest ? "hl" : ""}">${v.latest ? "الأحدث" : "سابق"}</td>`).join("")}</tr>
+        </tbody>`;
+
+    document.getElementById("versionDetailsOverlay").classList.add("open");
+    document.getElementById("versionDetailsPanel").classList.add("open");
+}
+function closeVersionDetails() {
+    document.getElementById("versionDetailsOverlay").classList.remove("open");
+    document.getElementById("versionDetailsPanel").classList.remove("open");
+}
+document.getElementById("versionDetailsOverlay").addEventListener("click", closeVersionDetails);
+document.getElementById("versionDetailsClose").addEventListener("click", closeVersionDetails);
+
+/* ── POPUP HELPERS ── */
+const show = (id) => document.getElementById(id).classList.remove("hidden");
+const hide = (id) => document.getElementById(id).classList.add("hidden");
+document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => hide(b.dataset.close)));
+document.querySelectorAll(".popup").forEach((p) => p.addEventListener("mousedown", (e) => { if (e.target === p) p.classList.add("hidden"); }));
+document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    document.querySelectorAll(".popup:not(.hidden)").forEach((p) => p.classList.add("hidden"));
+    closeVersionDetails();
+});
+
+function previewHtml(pack) {
+    const img = (pack.images || [])[0];
+    const ver = currentVersionOf(pack);
+    return `
+        ${img ? `<img src="${esc(img)}" alt="">` : `<div class="icon-tile">${ic("grid")}</div>`}
+        <div>
+            <div class="preview-name">${esc(pack.name)}</div>
+            <div class="preview-sub">باك جرافيكس · المستوى ${esc(pack.level)} · v${esc(ver.version)}</div>
+        </div>`;
 }
 
-document.getElementById("closePopup").onclick = () =>
-    document.getElementById("packPopup").classList.add("hidden");
-
+/* ── PACK SETTINGS ── */
+function openPackSettings(id) {
+    selectedPack = packs.find((p) => p.id === id);
+    if (!selectedPack) return;
+    document.getElementById("managePackPreview").innerHTML = previewHtml(selectedPack);
+    show("packPopup");
+}
+document.getElementById("closePopup").onclick = () => hide("packPopup");
 document.getElementById("reinstallPackBtn").onclick = () => {
     if (!selectedPack) return;
-    document.getElementById("packPopup").classList.add("hidden");
-    localStorage.setItem("pending_download", JSON.stringify({
-        url: selectedPack.url, name: selectedPack.name,
-        productId: selectedPack.id, type: "pack", deleteFirst: true
-    }));
-    window.api.openPage("downloads.html");
+    hide("packPopup");
+    startInstall(selectedPack);
 };
 
 /* ── MANAGE POPUP ── */
-function openManagePopup() {
-    document.getElementById("managePopup").classList.remove("hidden");
-}
+document.getElementById("manageOpenBtn").onclick = () => show("managePopup");
 
 document.getElementById("reshadeBtn").onclick = async () => {
-    document.getElementById("managePopup").classList.add("hidden");
-    showNotify("جاري تفعيل ReShade...");
-    const r = await window.api.enableReshade();
-    if (r.alreadyEnabled) showNotify("ℹ️ ReShade مفعّل مسبقاً", "success");
-    else if (r.success) showNotify("✅ تم تفعيل ReShade! أعد تشغيل FiveM", "success");
-    else showNotify(`❌ ${r.message || "فشل تفعيل ReShade"}`, "error");
+    hide("managePopup");
+    showNotify("جاري تفعيل ReShade...", "info");
+    try {
+        const r = await window.api.enableReshade();
+        if (r.alreadyEnabled) showNotify("ReShade مفعّل مسبقاً");
+        else if (r.success) showNotify("تم تفعيل ReShade — أعد تشغيل FiveM");
+        else showNotify(r.message || "فشل تفعيل ReShade", "error");
+    } catch { showNotify("فشل تفعيل ReShade", "error"); }
 };
 
 document.getElementById("launchersBtn").onclick = async () => {
-
-    document.getElementById("managePopup").classList.add("hidden");
-
-    showNotify("جاري تحميل Launchers على سطح المكتب...");
-
-    const launchers = [
-        {
-            name: "CA - L1.exe",
-            url: "http://213.199.63.97/CA%20-%20L1.exe"
-        },
-        {
-            name: "CA - L2.exe",
-            url: "http://213.199.63.97/CA%20-%20L2.exe"
-        }
-    ];
-
-    const r = await window.api.downloadLaunchers(launchers);
-
-    if (r.success) {
-        showNotify("✅ تم تحميل الـ Launchers على سطح المكتب", "success");
-    } else {
-        showNotify("❌ فشل التحميل", "error");
-    }
-
+    hide("managePopup");
+    showNotify("جاري تحميل اللانشرات على سطح المكتب...", "info", 5000);
+    try {
+        const r = await window.api.downloadLaunchers();
+        if (r.success) showNotify("تم تحميل اللانشرات على سطح المكتب");
+        else showNotify("فشل تحميل اللانشرات", "error");
+    } catch { showNotify("فشل تحميل اللانشرات", "error"); }
 };
 
 document.getElementById("deleteBtn").onclick = async () => {
-    document.getElementById("managePopup").classList.add("hidden");
-    const ok = confirm("هل تريد حذف الجرافيكس المثبتة؟\nسيتم حذف citizen و plugins و mods.");
+    hide("managePopup");
+    const ok = await askConfirm({
+        title: "حذف الجرافيكس المثبّتة؟",
+        message: "لا يمكن التراجع عن هذا الإجراء.",
+        details: ["سيتم حذف مجلد citizen", "سيتم حذف مجلد plugins", "سيتم حذف مجلد mods"],
+        confirmText: "نعم، احذف",
+        danger: true
+    });
     if (!ok) return;
-    showNotify("جاري الحذف...");
-    const r = await window.api.deleteGraphics();
-    if (r.success) showNotify("✅ تم حذف الجرافيكس", "success");
-    else showNotify("❌ فشل الحذف", "error");
+    showNotify("جاري الحذف...", "info");
+    try {
+        const r = await window.api.deleteGraphics();
+        if (r.success) showNotify("تم حذف الجرافيكس");
+        else showNotify("فشل الحذف", "error");
+    } catch { showNotify("فشل الحذف", "error"); }
 };
 
-/* ── LOGOUT ── */
-async function logout() {
-    await window.api.auth.logout();
-    window.api.openPage("login.html");
+/* ── RATING ── */
+function updateStarInputs(rating, temp = false) {
+    document.querySelectorAll("#ratingStarsInput .star-btn").forEach((btn, i) => btn.classList.toggle("active", i < rating));
+    if (!temp) currentRating = rating;
+}
+const starsBox = document.getElementById("ratingStarsInput");
+starsBox.addEventListener("click", (e) => {
+    const b = e.target.closest(".star-btn");
+    if (b) updateStarInputs(Number(b.dataset.rating));
+});
+starsBox.addEventListener("mouseover", (e) => {
+    const b = e.target.closest(".star-btn");
+    if (b) updateStarInputs(Number(b.dataset.rating), true);
+});
+starsBox.addEventListener("mouseleave", () => updateStarInputs(currentRating, true));
+
+function openRatingPopup(packId) {
+    selectedPack = packs.find((p) => p.id === packId);
+    if (!selectedPack) return;
+    document.getElementById("ratingPackPreview").innerHTML = previewHtml(selectedPack);
+    currentRating = 0;
+    document.getElementById("ratingComment").value = "";
+    updateStarInputs(0);
+    loadPackComments(packId);
+    show("ratingPopup");
 }
 
-/* ── INIT ── */
-async function init() {
-    const ok = await checkAuth();
-    if (!ok) return;
+async function loadPackComments(packId) {
+    const commentsList = document.getElementById("commentsList");
+    const ratingsList = document.getElementById("ratingsList");
+    commentsList.innerHTML = "";
+    ratingsList.innerHTML = "";
 
-    // Fetch packs from server
-    const fetched = await fetchPacksFromServer();
-    if (!fetched) {
-        showNotify("فشل تحميل البيانات من السيرفر", "error");
-        return;
+    let r;
+    try { r = await window.api.ratings.getPack(packId); } catch { r = { success: false }; }
+
+    if (r.success && r.comments && r.comments.length) {
+        commentsList.innerHTML = r.comments.map((c) => `
+            <div class="comment-item">
+                <div class="comment-head">
+                    <span class="comment-author">${esc(c.username)}</span>
+                    <span class="comment-date">${fmtDate(c.created_at)}</span>
+                    ${canDeleteComment(c.discord_id) ? `<button class="link-btn danger" data-del-comment="${esc(c.id)}">حذف</button>` : ""}
+                </div>
+                <div class="stars">${starsHtml(c.rating || 0)}</div>
+                ${c.comment ? `<div class="comment-text">${esc(c.comment)}</div>` : ""}
+            </div>`).join("");
+    } else {
+        commentsList.innerHTML = '<div class="empty-line">لا توجد تعليقات بعد</div>';
+    }
+
+    if (isAdmin()) {
+        ratingsList.innerHTML = `<div class="section-label">كل التقييمات (للإدارة)</div>` +
+            (r.success && r.ratings && r.ratings.length
+                ? r.ratings.map((x) => `
+                    <div class="comment-item">
+                        <div class="comment-head">
+                            <span class="comment-author">${esc(x.username)}</span>
+                            <span class="comment-date">${fmtDate(x.created_at)}</span>
+                            <button class="link-btn danger" data-del-rating="${esc(x.id)}">حذف التقييم</button>
+                        </div>
+                        <div class="stars">${starsHtml(x.rating)}</div>
+                    </div>`).join("")
+                : '<div class="empty-line">لا توجد تقييمات بعد</div>');
+    }
+}
+
+document.getElementById("ratingPopup").addEventListener("click", async (e) => {
+    const dc = e.target.closest("[data-del-comment]");
+    const dr = e.target.closest("[data-del-rating]");
+    if (!dc && !dr) return;
+    const ok = await askConfirm({
+        title: dc ? "حذف هذا التعليق؟" : "حذف هذا التقييم؟",
+        confirmText: "حذف", danger: true
+    });
+    if (!ok || !selectedPack) return;
+
+    const r = dc
+        ? await window.api.ratings.deleteComment(dc.dataset.delComment, currentDiscordId)
+        : await window.api.ratings.deleteRating(dr.dataset.delRating, currentDiscordId);
+
+    if (r.success) {
+        showNotify(dc ? "تم حذف التعليق" : "تم حذف التقييم");
+        await loadRatings();
+        refreshCard(selectedPack.id);
+        loadPackComments(selectedPack.id);
+    } else {
+        showNotify(r.message || "تعذّر الحذف", "error");
+    }
+});
+
+document.getElementById("submitRatingBtn").addEventListener("click", async () => {
+    if (!selectedPack || currentRating === 0) return showNotify("الرجاء اختيار تقييم أولاً", "error");
+
+    const btn = document.getElementById("submitRatingBtn");
+    btn.disabled = true;
+    try {
+        const comment = document.getElementById("ratingComment").value;
+        const auth = await window.api.auth.check();
+        const username = auth.success ? (auth.username || "مجهول") : "مجهول";
+        const discordId = auth.success ? auth.discordId : null;
+
+        const r = await window.api.ratings.submit(selectedPack.id, currentRating, comment, username, discordId);
+        if (r.success) {
+            showNotify("تم إرسال تقييمك، شكراً لك");
+            hide("ratingPopup");
+            await loadRatings();
+            refreshCard(selectedPack.id);
+        } else {
+            showNotify(r.message || "فشل إرسال التقييم", "error");
+        }
+    } catch {
+        showNotify("فشل إرسال التقييم", "error");
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+/* ── INIT ── */
+(async function init() {
+    if (!(await checkAuth())) return;
+
+    packsContainer.innerHTML = Array.from({ length: 3 }, () => '<div class="pk skeleton shimmer-box"></div>').join("");
+
+    if (!(await fetchPacksFromServer())) {
+        packsContainer.innerHTML = `<div class="empty" style="grid-column:1/-1">
+            <div class="icon-tile err">${ic("wifi", "lg")}</div><h3>تعذّر تحميل الباكات</h3><p>تحقق من اتصالك بالإنترنت ثم أعد فتح الصفحة.</p></div>`;
+        return showNotify("فشل تحميل البيانات من الخادم", "error");
     }
 
     await loadRatings();
     loadPacks();
-
-    // Setup rating stars click handlers
-    const starInputs = document.querySelectorAll('.rating-star-input');
-    starInputs.forEach(star => {
-        star.addEventListener('click', () => {
-            const rating = parseInt(star.dataset.rating);
-            updateStarInputs(rating);
-        });
-    });
-
-    // Setup submit button
-    document.getElementById('submitRatingBtn').addEventListener('click', submitRating);
-}
-
-init();
+    refreshBackupBtn();
+})();

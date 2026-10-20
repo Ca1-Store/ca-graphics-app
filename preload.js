@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("api", {
     fullscreen: () => ipcRenderer.invoke("window:fullscreen"),
 
     openPage:   (page) => ipcRenderer.invoke("open:page", page),
+    readFile:   (p) => ipcRenderer.invoke("file:read", p),
 
 
 
@@ -39,6 +40,16 @@ contextBridge.exposeInMainWorld("api", {
     downloadLaunchers: () => ipcRenderer.invoke("download:launchers"),
 
     getDownloadState:  () => ipcRenderer.invoke("download:getState"),
+    pauseDownload:     () => ipcRenderer.invoke("download:pause"),
+    resumeDownload:    () => ipcRenderer.invoke("download:resume"),
+    cancelDownload:    () => ipcRenderer.invoke("download:cancel"),
+    presets: {
+        list:       () => ipcRenderer.invoke("presets:list"),
+        remove:     (names) => ipcRenderer.invoke("presets:remove", names),
+        pick:       () => ipcRenderer.invoke("presets:pick"),
+        save:       (name, content, overwrite) => ipcRenderer.invoke("presets:save", { name, content, overwrite }),
+        install:    (file, url, overwrite) => ipcRenderer.invoke("presets:install", { file, url, overwrite })
+    },
 
 
 
@@ -89,6 +100,9 @@ contextBridge.exposeInMainWorld("api", {
     /* ── Graphics ── */
 
     deleteGraphics: () => ipcRenderer.invoke("graphics:delete"),
+    backupGraphics:   () => ipcRenderer.invoke("graphics:backup"),
+    backupInfo:       () => ipcRenderer.invoke("graphics:backupInfo"),
+    restoreGraphics:  () => ipcRenderer.invoke("graphics:restore"),
 
     enableReshade:  () => ipcRenderer.invoke("reshade:enable"),
 
