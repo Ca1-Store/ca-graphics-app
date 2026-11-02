@@ -2,79 +2,50 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; media-src 'self' http: https:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ca Store - المودات</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="pages.css">
+    <link rel="stylesheet" href="ui.css">
 </head>
 <body data-page="addons">
     <div class="bg"></div>
 
     <main class="content">
-        <div class="content-inner">
-
-            <header class="page-head">
-                <div>
-                    <div class="eyebrow">مركز المودات</div>
-                    <h1 class="page-title">مكتبة المودات</h1>
-                    <p class="page-sub">إضافات وتعديلات بيئة رسمية من CA Store</p>
+        <div class="lib">
+            <div class="lib-main" id="libMain">
+                <div class="lib-tools">
+                    <label class="sbox"><span data-ic="search"></span><input type="text" id="q" placeholder="ابحث في المكتبة..." autocomplete="off"></label>
+                    <select class="sel" id="sortSel" style="width:150px" title="الترتيب">
+                        <option value="new">الأحدث</option>
+                        <option value="pop">الأكثر تحميلاً</option>
+                        <option value="name">الاسم</option>
+                        <option value="size">الحجم</option>
+                    </select>
+                    <div class="seg2" id="viewSeg"><button data-view="grid" class="on" data-ic="grid"></button><button data-view="list" data-ic="list"></button></div>
+                    <button class="btn" id="manageBtn" data-ic="folder">ملفاتي</button>
                 </div>
-                <div class="page-actions">
-                    <button id="manageModsBtn" class="btn" data-ic="sliders">إدارة المودات</button>
+                <div class="chips" id="modeChips">
+                    <button class="cchip on" data-mode="mods" data-ic="package">المودات</button>
+                    <button class="cchip" data-mode="bundles" data-ic="layers">الحزم <span id="bundleN" style="opacity:.7"></span></button>
                 </div>
-            </header>
-
-            <section class="stat-grid cols-3">
-                <div class="stat">
-                    <div class="stat-top"><div class="icon-tile sm ok" data-ic="check"></div></div>
-                    <div class="stat-value" id="modsCount">0</div>
-                    <div class="stat-label">مودات مثبّتة</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-top"><div class="icon-tile sm" data-ic="package"></div></div>
-                    <div class="stat-value" id="totalMods">0</div>
-                    <div class="stat-label">مودات متاحة</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-top"><div class="icon-tile sm" data-ic="layers"></div></div>
-                    <div class="stat-value" id="sectionsCount">0</div>
-                    <div class="stat-label">تصنيفات</div>
-                </div>
-            </section>
-
-            <div class="tool-bar">
-                <div class="search">
-                    <span data-ic="search"></span>
-                    <input type="text" id="modsSearch" placeholder="ابحث عن مود..." autocomplete="off">
-                    <button id="clearSearch" class="search-clear hidden-btn" data-ic="x" title="مسح"></button>
-                </div>
-                <select class="select" id="sortSel" title="الترتيب">
-                    <option value="default">الترتيب: الافتراضي</option>
-                    <option value="name">الاسم</option>
-                    <option value="installed">المثبّتة أولاً</option>
-                    <option value="notinstalled">غير المثبّتة أولاً</option>
-                    <option value="updates">التحديثات أولاً</option>
-                </select>
-                <button class="tool-chip" id="favOnly" data-ic="heart">المفضلة</button>
-                <button class="tool-chip" id="selectMode" data-ic="check">تحديد متعدد</button>
-                <div class="end">
-                    <div class="seg" id="densitySeg"><button data-density="cozy" class="on">مريح</button><button data-density="compact">مضغوط</button></div>
-                    <div class="seg" id="viewSeg"><button data-view="grid" class="on" data-ic="grid">شبكة</button><button data-view="list" data-ic="list">قائمة</button></div>
-                </div>
+                <div id="featBox"></div>
+                <div id="grid" class="mgrid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+                <div id="empty" class="empty hidden"><div class="icon-tile" data-ic="search"></div><h3>لا توجد نتائج</h3><p>جرّب تغيير القسم أو كلمة البحث.</p></div>
+                <div class="selbar hidden" id="selBar"><b><span id="selN">0</span> مود محدد</b><span class="grow" style="flex:1"></span><button class="btn" id="selClear">إلغاء</button><button class="btn btn-primary" id="selGo" data-ic="download">تثبيت المحدد</button></div>
             </div>
-            <div class="tabs" id="mdTabs"></div>
-
-            <div id="mdSkeleton" class="mods-grid">
-                <div class="mc shimmer-box"></div><div class="mc shimmer-box"></div><div class="mc shimmer-box"></div>
-            </div>
-
-            <div id="modsPreview"></div>
-
-            <div id="mdEmpty" class="empty hidden">
-                <div class="icon-tile" data-ic="search"></div>
-                <h3>لا توجد نتائج</h3>
-                <p>جرّب كلمة بحث أخرى.</p>
-            </div>
+            <aside class="rail" id="rail">
+                <h4>الأقسام</h4>
+                <div id="cats"></div>
+                <h4>تصفية</h4>
+                <label class="chk"><input type="checkbox" id="fOpen"><span class="bx" data-ic="check"></span>المتاح لي فقط</label>
+                <label class="chk"><input type="checkbox" id="fInst"><span class="bx" data-ic="check"></span>المثبّتة فقط</label>
+                <label class="chk"><input type="checkbox" id="fUpd"><span class="bx" data-ic="check"></span>لها تحديث</label>
+                <label class="chk"><input type="checkbox" id="fFav"><span class="bx" data-ic="check"></span>المفضلة</label>
+                <h4>الكثافة</h4>
+                <div class="seg" id="densitySeg" style="align-self:flex-start"><button data-d="cozy" class="on">مريح</button><button data-d="compact">مضغوط</button></div>
+            </aside>
         </div>
     </main>
 
@@ -82,27 +53,20 @@
         <div class="modal wide">
             <div class="modal-head">
                 <div>
-                    <div class="modal-title">إدارة المودات</div>
-                    <div class="modal-sub"><b id="manageCount">0</b> مود في القائمة · <span id="manageSaveStatus">لا توجد تغييرات</span></div>
+                    <div class="modal-title">ملفاتي</div>
+                    <div class="modal-sub"><b id="manageCount">0</b> ملف مود في مجلد اللعبة</div>
                 </div>
                 <button id="closeManageBtn" class="modal-x" data-ic="x"></button>
             </div>
             <div id="modsList" class="manage-list"></div>
             <div class="modal-actions">
-                <button id="addModBtn" class="btn" data-ic="plus">إضافة ملف</button>
-                <button id="deleteAllBtn" class="btn btn-danger" data-ic="trash">حذف الكل</button>
-                <button id="saveModsBtn" class="btn btn-primary" data-ic="check">حفظ التغييرات</button>
+                <button id="addModBtn" class="btn" data-ic="plus">إضافة ملف من جهازي</button>
             </div>
         </div>
     </div>
 
-    <div class="queue-bar" id="queueBar">
-        <b><span id="queueN">0</span> مود محدد</b>
-        <button class="cta ghost" id="queueClear">إلغاء</button>
-        <button class="cta" id="queueGo" data-ic="download">تثبيت المحدد</button>
-    </div>
-
     <div id="notify" class="notification"></div>
+    <script src="icons-extra.js"></script>
     <script src="shell.js"></script>
     <script src="addons.js"></script>
 </body>

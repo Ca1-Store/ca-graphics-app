@@ -1,372 +1,192 @@
-/* ==========================================================================
-   ADDONS — المودات
-   ========================================================================== */
-const { ic, esc, toast, confirm: askConfirm } = window.CA;
+/* مكتبة المودات v4 — البيانات من /api/v4/library والتثبيت عبر api.lib.* */
+const { ic, esc, toast, safeImg, confirm: askConfirm, favs, prefs: P, fmtNum } = window.CA;
 const $ = (id) => document.getElementById(id);
-const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
+const CAT_IC = { road: "road", tree: "tree", car: "car", mountain: "mountain", star: "star", package: "package", layers: "layers" };
 
-const modsPreview = $("modsPreview");
+let LIB = null, installed = new Set(), activeCat = "all", mode = "mods", q = "", view = P.get("mods_view", "grid"), density = P.get("density", "cozy");
+const flt = { open: false, inst: false, upd: false, fav: false };
+let busyId = null, selMode = false; const selected = new Set(); let queueRunning = false;
+const verMap = () => window.CA.lsGet("mod_versions", {});
+const fileKey = (m) => String(m.fileName || "").toLowerCase();
+const isInst = (m) => m.fileName && installed.has(fileKey(m));
+const hasUpd = (m) => isInst(m) && verMap()[fileKey(m)] && verMap()[fileKey(m)] !== m.version;
+
+function badge(m) {
+    const t = [];
+    if (m.early) t.push('<span class="badge warn">وصول مبكر</span>');
+    if (m.isNew) t.push('<span class="badge ok">جديد</span>');
+    if (hasUpd(m)) t.push('<span class="badge warn">تحديث</span>');
+    return t.join("");
+}
+function card(m) {
+    const img = safeImg(m.cover), inst = isInst(m), upd = hasUpd(m), busy = busyId === m.id;
+    const cat = (LIB.categories || []).find((c) => c.slug === m.category);
+    let act;
+    if (!m.unlocked) act = `<div class="lock-note">${ic("lock", "sm")}${esc(m.lockReason && m.lockReason.startsWith("plan:") ? "يتطلب " + m.lockReason.slice(5) + " أو أعلى" : "غير متاح لنسختك")}</div>`;
+    else if (busy) act = `<div class="dlp"><i id="dlbar-${m.id}"></i></div><div class="dlm"><span id="dltxt-${m.id}">جاري التحضير...</span><button class="link-btn" data-act="cancel">إلغاء</button></div>`;
+    else if (upd) act = `<button class="btn btn-upd" data-act="install">${ic("refresh")}تحديث</button><button class="ibtn danger" data-act="remove" title="حذف">${ic("trash")}</button>`;
+    else if (inst) act = `<button class="btn btn-ok2" data-act="reinstall">${ic("check")}مثبّت</button><button class="ibtn danger" data-act="remove" title="حذف">${ic("trash")}</button>`;
+    else act = `<button class="btn btn-primary" data-act="install">${ic("download")}تثبيت</button>`;
+    const planChips = (m.plans || []).length ? (m.plans || []).slice(0, 5).map((p) => `<span class="badge">${esc(p.replace("CA-", "CA"))}</span>`).join("") : '<span class="badge">للجميع</span>';
+    return `<div class="mcard ${m.unlocked ? "" : "locked"} ${selected.has(m.id) ? "sel" : ""}" data-id="${m.id}" id="mc-${m.id}">
+      <div class="cv">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : `<div class="ph">${ic(CAT_IC[(cat && cat.icon)] || "package")}</div>`}
+        <div class="tg">${cat ? `<span class="badge hi">${esc(cat.name)}</span>` : ""}${badge(m)}</div>
+        <button class="fv ${favs.has("mod:" + m.id) ? "on" : ""}" data-act="fav" title="مفضلة">${ic("heart", "sm")}</button></div>
+      <div class="cb"><h5>${esc(m.name)}</h5><p>${esc(m.description || "")}</p>
+        <div class="meta"><span>${ic("download", "sm")} ${esc(m.sizeLabel || "—")}</span><span>v${esc(m.version || "1")}</span><span>${fmtNum(m.downloads)} تحميل</span></div>
+        <div class="plans" style="display:flex;gap:4px;flex-wrap:wrap">${planChips}</div>
+        <div class="act">${act}</div></div></div>`;
+}
+
+function filtered() {
+  let list = (LIB.mods || []).slice();
+  if (activeCat !== "all") list = list.filter((m) => m.category === activeCat);
+  if (q) { const s = q.toLowerCase(); list = list.filter((m) => (m.name + " " + (m.description || "")).toLowerCase().includes(s)); }
+  if (flt.open) list = list.filter((m) => m.unlocked);
+  if (flt.inst) list = list.filter(isInst);
+  if (flt.upd) list = list.filter(hasUpd);
+  if (flt.fav) list = list.filter((m) => favs.has("mod:" + m.id));
+  const sort = $("sortSel").value;
+  list.sort((a, b) => sort === "name" ? a.name.localeCompare(b.name, "ar") : sort === "pop" ? (b.downloads || 0) - (a.downloads || 0) : sort === "size" ? (b.sizeBytes || 0) - (a.sizeBytes || 0) : new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return list;
+}
+
+function renderCats() {
+  const all = (LIB.mods || []).length;
+  $("cats").innerHTML = `<button class="cat ${activeCat === "all" ? "on" : ""}" data-cat="all">${ic("layers")}كل المودات<em>${all}</em></button>` +
+    (LIB.categories || []).map((c) => `<button class="cat ${activeCat === c.slug ? "on" : ""}" data-cat="${esc(c.slug)}">${ic(CAT_IC[c.icon] || "package")}${esc(c.name)}<em>${c.count != null ? c.count : (LIB.mods || []).filter((m) => m.category === c.slug).length}</em></button>`).join("");
+}
+function renderFeatured() {
+  const f = (LIB.mods || []).find((m) => m.featured);
+  const box = $("featBox");
+  if (!f || mode !== "mods" || activeCat !== "all" || q) { box.innerHTML = ""; return; }
+  const img = safeImg(f.cover);
+  box.innerHTML = `<div class="feat" ${img ? `style="background-image:url('${esc(img).replace(/'/g, "%27")}')"` : ""}><div><span class="badge hi">مود الأسبوع</span><h3>${esc(f.name)}</h3><p>${esc(f.description || "")}</p></div>${f.unlocked ? `<button class="btn btn-primary" data-feat="${f.id}">${ic("download")}${isInst(f) ? "عرض" : "تثبيت الآن"}</button>` : `<span class="lock-note">${ic("lock", "sm")}غير متاح لنسختك</span>`}</div>`;
+}
+function renderBundles() {
+  const list = LIB.bundles || [];
+  $("grid").className = "bundles";
+  $("grid").innerHTML = list.map((b) => {
+    const mods = (b.modIds || []).map((id) => (LIB.mods || []).find((m) => m.id === id)).filter(Boolean);
+    return `<div class="bundle" data-bid="${b.id}"><h5>${esc(b.name)}</h5><p>${esc(b.description || "")}</p><div class="meta" style="display:flex;gap:10px;font-size:11.5px;color:var(--text-3)"><span>${mods.length} مود</span><span>${esc(b.sizeLabel || "")}</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${mods.slice(0, 6).map((m) => `<span class="badge">${esc(m.name)}</span>`).join("")}</div>${b.unlocked ? `<button class="btn btn-primary" data-bundle="${b.id}">${ic("download")}تثبيت الحزمة</button>` : `<span class="lock-note">${ic("lock", "sm")}غير متاحة لنسختك</span>`}</div>`;
+  }).join("");
+  $("empty").classList.toggle("hidden", list.length > 0);
+}
+function render() {
+  document.body.classList.toggle("compact", density === "compact");
+  renderCats();
+  $("bundleN").textContent = (LIB.bundles || []).length ? `(${LIB.bundles.length})` : "";
+  if (mode === "bundles") { $("featBox").innerHTML = ""; return renderBundles(); }
+  renderFeatured();
+  const list = filtered();
+  $("grid").className = "mgrid " + (view === "list" ? "list" : "");
+  $("grid").innerHTML = list.map(card).join("");
+  $("empty").classList.toggle("hidden", list.length > 0);
+  updateSel();
+}
+function updateSel() { $("selBar").classList.toggle("hidden", !selected.size); $("selN").textContent = selected.size; }
+
+/* ── التثبيت ── */
+async function doInstall(m, { silent } = {}) {
+  if (busyId) { toast("هناك عملية جارية، انتظر حتى تنتهي", "error"); return { success: false }; }
+  const pf = await window.api.lib.preflight({ type: "mod", id: m.id });
+  if (!pf.success && pf.code === "NO_FIVEM") { toast("حدّد مسار FiveM من الإعدادات أولاً", "error"); return pf; }
+  if (!pf.success && pf.code === "NO_SPACE") { toast("المساحة الحرة لا تكفي لتثبيت هذا المود", "error"); return pf; }
+  if (!silent && ((pf.conflicts || []).length || (pf.warnings || []).length)) {
+    const ok = await askConfirm({ title: `تثبيت «${m.name}»`, message: (pf.conflicts || []).length ? "هذا المود يتعارض مع مودات مثبّتة عندك" : "تنبيهات قبل التثبيت", details: [...(pf.conflicts || []).map((c) => "يتعارض مع: " + c.name), ...(pf.warnings || [])], confirmText: "متابعة التثبيت" });
+    if (!ok) return { success: false, canceled: true };
+  }
+  busyId = m.id; render();
+  const r = await window.api.lib.install({ type: "mod", id: m.id, overwrite: true });
+  busyId = null;
+  if (r && r.success) {
+    const vm = verMap(); vm[fileKey(m)] = m.version; window.CA.lsSet("mod_versions", vm);
+    installed.add(fileKey(m)); toast(`تم تثبيت ${m.name}`);
+    try { const t = JSON.parse(localStorage.getItem("download_history") || "[]"); t.unshift({ name: m.name, type: "mod", at: Date.now(), ok: true }); localStorage.setItem("download_history", JSON.stringify(t.slice(0, 50))); } catch {}
+  } else if (!(r && r.canceled)) toast((r && r.message) || "فشل التثبيت", "error", 4500);
+  render(); return r;
+}
+window.api.onDownloadProgress((d) => {
+  if (!busyId) return;
+  const b = $("dlbar-" + busyId), t = $("dltxt-" + busyId);
+  if (b) b.style.width = d.percent + "%";
+  if (t) t.textContent = `${d.percent}%` + (d.speed && d.speed !== "0" ? ` · ${d.speed} MB/s` : "");
+});
+window.api.onInstallStatus((d) => { const t = busyId && $("dltxt-" + busyId); if (t && d.msg) t.textContent = d.msg; });
+
+async function runQueue() {
+  if (queueRunning) return; queueRunning = true;
+  const ids = [...selected]; let ok = 0;
+  for (const id of ids) { const m = LIB.mods.find((x) => x.id === id); if (!m || !m.unlocked) continue; const r = await doInstall(m, { silent: true }); if (r && r.success) ok++; selected.delete(id); if (r && r.code === "NO_FIVEM") break; }
+  queueRunning = false; selMode = false; selected.clear(); render(); toast(`اكتمل تثبيت ${ok} من ${ids.length}`, ok === ids.length ? "success" : "error");
+}
+
+/* ── الأحداث ── */
+$("grid").addEventListener("click", async (e) => {
+  const bt = e.target.closest("[data-bundle]");
+  if (bt) {
+    const b = LIB.bundles.find((x) => x.id === Number(bt.dataset.bundle));
+    const ok = await askConfirm({ title: `تثبيت حزمة «${b.name}»`, message: `سيتم تثبيت ${(b.modIds || []).length} مود بالتتابع.`, confirmText: "تثبيت الحزمة" });
+    if (!ok) return; bt.disabled = true; toast("جاري تثبيت الحزمة...", "info", 2500);
+    const r = await window.api.lib.installBundle(b.id); const okN = (r.results || []).filter((x) => x.ok).length;
+    toast(`تم تثبيت ${okN} من ${(r.results || []).length}`, r.success ? "success" : "error"); await refreshInstalled(); render(); return;
+  }
+  const c = e.target.closest(".mcard"); if (!c) return;
+  const m = LIB.mods.find((x) => x.id === Number(c.dataset.id)); if (!m) return;
+  const act = e.target.closest("[data-act]")?.dataset.act;
+  if (act === "fav") { const on = favs.toggle("mod:" + m.id); e.target.closest(".fv").classList.toggle("on", on); }
+  else if (act === "install" || act === "reinstall") { if (act === "reinstall") { const ok = await askConfirm({ title: "إعادة تثبيت المود؟", message: `سيتم استبدال ملف «${m.name}» الحالي.`, confirmText: "إعادة التثبيت" }); if (!ok) return; } doInstall(m, { silent: act === "reinstall" }); }
+  else if (act === "remove") { const ok = await askConfirm({ title: "حذف المود؟", message: `سيتم حذف «${m.name}» من مجلد اللعبة.`, confirmText: "حذف", danger: true }); if (!ok) return; const r = await window.api.lib.remove({ type: "mod", id: m.id }); if (r.success) { installed.delete(fileKey(m)); toast("تم الحذف"); render(); } else toast(r.message || "فشل الحذف", "error"); }
+  else if (act === "cancel") { window.api.cancelDownload(); }
+  else if (selMode && m.unlocked) { if (selected.has(m.id)) selected.delete(m.id); else selected.add(m.id); render(); }
+});
+$("featBox").addEventListener("click", (e) => { const b = e.target.closest("[data-feat]"); if (!b) return; const m = LIB.mods.find((x) => x.id === Number(b.dataset.feat)); if (m && !isInst(m)) doInstall(m); else focusCard(m.id); });
+$("cats").addEventListener("click", (e) => { const b = e.target.closest("[data-cat]"); if (!b) return; activeCat = b.dataset.cat; mode = "mods"; syncMode(); render(); });
+$("modeChips").addEventListener("click", (e) => { const b = e.target.closest("[data-mode]"); if (!b) return; mode = b.dataset.mode; syncMode(); render(); });
+function syncMode() { $("modeChips").querySelectorAll(".cchip").forEach((x) => x.classList.toggle("on", x.dataset.mode === mode)); }
+$("q").addEventListener("input", (e) => { q = e.target.value.trim(); render(); });
+$("sortSel").addEventListener("change", render);
+$("viewSeg").addEventListener("click", (e) => { const b = e.target.closest("[data-view]"); if (!b) return; view = b.dataset.view; P.set("mods_view", view); $("viewSeg").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); render(); });
+$("densitySeg").addEventListener("click", (e) => { const b = e.target.closest("[data-d]"); if (!b) return; density = b.dataset.d; P.set("density", density); $("densitySeg").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); render(); });
+[["fOpen", "open"], ["fInst", "inst"], ["fUpd", "upd"], ["fFav", "fav"]].forEach(([id, k]) => $(id).addEventListener("change", (e) => { flt[k] = e.target.checked; render(); }));
+$("selClear").addEventListener("click", () => { selected.clear(); selMode = false; render(); });
+$("selGo").addEventListener("click", runQueue);
+document.addEventListener("keydown", (e) => { if (e.key === "Shift") { selMode = true; } });
+$("grid").addEventListener("dblclick", (e) => { const c = e.target.closest(".mcard"); if (c && !e.target.closest("button")) { const id = Number(c.dataset.id); const m = LIB.mods.find((x) => x.id === id); if (m && m.unlocked) { selMode = true; selected.add(id); render(); } } });
+
+function focusCard(id) { const el = $("mc-" + id); if (!el) return; el.scrollIntoView({ block: "center", behavior: "smooth" }); el.style.outline = "2px solid var(--silver)"; setTimeout(() => (el.style.outline = ""), 2200); }
+async function refreshInstalled() { const r = await window.api.lib.installed(); installed = new Set(((r && r.mods) || []).map((x) => x.toLowerCase())); }
+
+/* ── ملفاتي ── */
 const popup = $("managePopup");
-const modsList = $("modsList");
-
-let currentMods = [];
-let pendingMods = [];
-let userPlans = [];
-let sections = [];
-let allMods = [];
-let activeSection = "all";
-let searchQuery = "";
-
-const baseName = (f) => String(f).split(/[\\/]/).pop();
-const showNotify = (m, t = "success") => toast(m, t);
-
-async function checkAuth() {
-    const r = await window.api.auth.check();
-    if (!r.success) { window.api.openPage("login.html"); return false; }
-    userPlans = r.plans || [];
-    return true;
+async function openManage() {
+  popup.classList.remove("hidden");
+  const r = await window.api.getModsList(); const files = (r && r.files) || [];
+  $("manageCount").textContent = files.length;
+  $("modsList").innerHTML = files.length ? files.map((f) => { const m = (LIB.mods || []).find((x) => fileKey(x) === f.toLowerCase()); return `<div class="manage-row"><div class="manage-thumb">${m && safeImg(m.cover) ? `<img src="${esc(safeImg(m.cover))}" alt="">` : ic("file")}</div><div class="grow" style="min-width:0"><div class="manage-name">${esc(m ? m.name : f)}</div><div class="manage-file ltr">${esc(f)}</div></div><button class="btn btn-sm btn-icon btn-danger" data-rm="${esc(f)}">${ic("trash", "sm")}</button></div>`; }).join("") : `<div class="empty-line">لا توجد ملفات مود في مجلد اللعبة.</div>`;
 }
-
-async function fetchModsFromServer() {
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/mods`);
-        const data = await res.json();
-        if (!data.success) return false;
-        sections = data.sections || [];
-        allMods = sections.flatMap((s) => s.mods || []);
-        return true;
-    } catch (e) { console.error(e); return false; }
-}
-
-function updateStats() {
-    $("modsCount").textContent = allMods.filter((m) => currentMods.map(baseName).includes(m.file)).length;
-    $("totalMods").textContent = allMods.length;
-    $("sectionsCount").textContent = sections.length;
-}
-
-/* ── prefs / favorites / versions ── */
-const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } };
-const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
-let favs = new Set(lsGet("fav_mods", []));
-let installedVer = lsGet("mod_versions", {});
-const prefs = { view: lsGet("mods_view", "grid"), density: lsGet("mods_density", "cozy"), sort: lsGet("mods_sort", "default") };
-let favOnly = false, selecting = false;
-const selected = new Set();
-
-const hasUpdate = (m, installed) => installed && m.version && installedVer[m.file] && String(installedVer[m.file]) !== String(m.version);
-const isUnlocked = (section) => (section.requiredPlans || []).some((p) => userPlans.includes(p));
-
-/* ── tabs ── */
-function renderTabs() {
-    $("mdTabs").innerHTML = [`<button class="tab ${activeSection === "all" ? "active" : ""}" data-section="all">الكل</button>`]
-        .concat(sections.map((s) => `<button class="tab ${activeSection === s.title ? "active" : ""}" data-section="${esc(s.title)}">${esc(s.title)}</button>`)).join("");
-}
-$("mdTabs").addEventListener("click", (e) => {
-    const t = e.target.closest(".tab");
-    if (!t) return;
-    activeSection = t.dataset.section;
-    renderTabs();
-    renderSections();
+$("manageBtn").addEventListener("click", openManage);
+$("closeManageBtn").addEventListener("click", () => popup.classList.add("hidden"));
+popup.addEventListener("mousedown", (e) => { if (e.target === popup) popup.classList.add("hidden"); });
+$("modsList").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-rm]"); if (!b) return;
+  const ok = await askConfirm({ title: "حذف الملف؟", message: b.dataset.rm, confirmText: "حذف", danger: true }); if (!ok) return;
+  const r = await window.api.lib.remove({ type: "mod", fileName: b.dataset.rm }); if (r.success) { await refreshInstalled(); openManage(); render(); } else toast(r.message || "فشل الحذف", "error");
+});
+$("addModBtn").addEventListener("click", async () => {
+  const r = await window.api.addModFile(); if (!r || !r.success || !r.files.length) return;
+  const cur = (await window.api.getModsList()).files || [];
+  const res = await window.api.saveMods([...cur, ...r.files]);
+  if (res && res.success) { toast(`تمت إضافة ${r.files.length} ملف`); await refreshInstalled(); openManage(); render(); } else toast("فشلت الإضافة", "error");
 });
 
-/* ── toolbar ── */
-function syncToolbar() {
-    $("sortSel").value = prefs.sort;
-    document.querySelectorAll("#viewSeg button").forEach((b) => b.classList.toggle("on", b.dataset.view === prefs.view));
-    document.querySelectorAll("#densitySeg button").forEach((b) => b.classList.toggle("on", b.dataset.density === prefs.density));
-    $("favOnly").classList.toggle("on", favOnly);
-    $("selectMode").classList.toggle("on", selecting);
-}
-$("sortSel").onchange = (e) => { prefs.sort = e.target.value; lsSet("mods_sort", prefs.sort); renderSections(); };
-$("viewSeg").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; prefs.view = b.dataset.view; lsSet("mods_view", prefs.view); syncToolbar(); renderSections(); };
-$("densitySeg").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; prefs.density = b.dataset.density; lsSet("mods_density", prefs.density); syncToolbar(); renderSections(); };
-$("favOnly").onclick = () => { favOnly = !favOnly; syncToolbar(); renderSections(); };
-$("selectMode").onclick = () => {
-    selecting = !selecting;
-    if (!selecting) selected.clear();
-    syncToolbar(); renderSections(); updateQueueBar();
-};
-
-function updateQueueBar() {
-    $("queueN").textContent = selected.size;
-    $("queueBar").classList.toggle("show", selecting && selected.size > 0);
-}
-$("queueClear").onclick = () => { selected.clear(); renderSections(); updateQueueBar(); };
-$("queueGo").onclick = () => {
-    const items = allMods.filter((m) => selected.has(m.file)).map(modPayload);
-    if (!items.length) return;
-    localStorage.setItem("download_queue", JSON.stringify(items));
-    window.api.openPage("downloads.html");
-};
-
-/* ── cards ── */
-const modPayload = (m) => ({ url: m.url, name: m.name, productId: m.file, type: "mod", fileName: m.file, version: m.version || null });
-
-function sortMods(list) {
-    const inst = (m) => currentMods.map(baseName).includes(m.file);
-    const by = {
-        name: (a, b) => (a.name || "").localeCompare(b.name || "", "ar"),
-        installed: (a, b) => inst(b) - inst(a),
-        notinstalled: (a, b) => inst(a) - inst(b),
-        updates: (a, b) => (hasUpdate(b, inst(b)) ? 1 : 0) - (hasUpdate(a, inst(a)) ? 1 : 0)
-    }[prefs.sort];
-    return by ? [...list].sort(by) : list;
-}
-
-function cardHtml(mod, section, unlocked, installed) {
-    const upd = hasUpdate(mod, installed);
-    const fav = favs.has(mod.file);
-    const sel = selected.has(mod.file);
-    const label = !unlocked ? "مقفل" : upd ? "تحديث" : installed ? "إعادة التثبيت" : "تثبيت";
-    const icon = !unlocked ? "lock" : installed && !upd ? "refresh" : "download";
-    return `
-    <article class="mc${installed ? " done" : ""}${unlocked ? "" : " locked"}${sel ? " sel" : ""}" data-file="${esc(mod.file)}" tabindex="0">
-        <div class="mc-img"><img src="${esc(mod.img)}" alt="${esc(mod.name)}" loading="lazy"></div>
-        ${unlocked ? `<span class="mc-check">${ic("check", "sm")}</span>` : ""}
-        <div class="mc-top">
-            <button class="fav-btn${fav ? " on" : ""}" data-act="fav" title="مفضلة">${ic("heart", "sm")}</button>
-            <div class="mc-tags">
-                ${installed ? `<span class="chip ok">${ic("check")}مثبّت</span>` : ""}
-                ${upd ? `<span class="chip upd">${ic("refresh")}تحديث</span>` : ""}
-                ${mod.isNew && !installed ? `<span class="chip">جديد</span>` : ""}
-                ${unlocked ? "" : `<span class="chip warn">${ic("lock")}${esc((section.requiredPlans || []).join(" / "))}</span>`}
-            </div>
-        </div>
-        <div class="mc-body">
-            <div class="mc-info">
-                <h3 class="mc-name">${esc(mod.name)}</h3>
-                <p class="mc-desc">${esc(mod.description || "تحسين جرافيكس عالي الجودة لـ FiveM.")}</p>
-            </div>
-            <div class="mc-row">
-                <button class="cta${installed && !upd || !unlocked ? " ghost" : ""}" data-act="install" ${unlocked ? "" : "disabled"}>${ic(icon)}${label}</button>
-                ${mod.size ? `<span class="size-tag">${esc(mod.size)}</span>` : ""}
-            </div>
-        </div>
-    </article>`;
-}
-
-function featuredHtml(mod, installed) {
-    const upd = hasUpdate(mod, installed);
-    return `
-    <section class="m-feat" data-file="${esc(mod.file)}">
-        <img src="${esc(mod.img)}" alt="${esc(mod.name)}">
-        <div class="m-feat-b">
-            <span class="chip" style="width:fit-content">${ic("star")}مود مميّز</span>
-            <div class="m-feat-name">${esc(mod.name)}</div>
-            <div class="m-feat-desc">${esc(mod.description || "")}</div>
-            <div class="row">
-                <button class="cta${installed && !upd ? " ghost" : ""}" data-act="install">${ic(installed && !upd ? "refresh" : "download")}${upd ? "تحديث" : installed ? "إعادة التثبيت" : "تثبيت"}</button>
-                ${mod.size ? `<span class="size-tag">${esc(mod.size)}</span>` : ""}
-            </div>
-        </div>
-    </section>`;
-}
-
-/* ── sections ── */
-function renderSections() {
-    $("mdSkeleton").classList.add("hidden");
-    modsPreview.className = (prefs.density === "compact" ? "compact " : "") + (selecting ? "selecting" : "");
-    const installedNames = currentMods.map(baseName);
-    const list = activeSection === "all" ? sections : sections.filter((s) => s.title === activeSection);
-    const q = searchQuery.toLowerCase();
-    let html = "", total = 0;
-
-    // المود المميّز: أول مود مفتوح غير مثبّت (أو عليه تحديث) في وضع «الكل» بدون بحث/فلتر
-    if (activeSection === "all" && !q && !favOnly) {
-        const cand = sections.filter(isUnlocked).flatMap((s) => s.mods || [])
-            .find((m) => m.featured) || sections.filter(isUnlocked).flatMap((s) => s.mods || [])
-            .find((m) => !installedNames.includes(m.file) || hasUpdate(m, true));
-        if (cand) html += featuredHtml(cand, installedNames.includes(cand.file));
-    }
-
-    const blocks = [];
-    list.forEach((section) => {
-        const unlocked = isUnlocked(section);
-        let mods = section.mods || [];
-        if (q) mods = mods.filter((m) => (m.name || "").toLowerCase().includes(q) || (m.description || "").toLowerCase().includes(q));
-        if (favOnly) mods = mods.filter((m) => favs.has(m.file));
-        if (!mods.length) return;
-        mods = sortMods(mods);
-        total += mods.length;
-        blocks.push(`
-        <section class="mod-block">
-            <div class="mod-block-head">
-                <div class="icon-tile ${unlocked ? "" : "warn"}">${ic(unlocked ? "package" : "lock")}</div>
-                <div class="grow">
-                    <div class="mod-block-title">${esc(section.title)} <span class="pill ${unlocked ? "ok" : "warn"} plain">${unlocked ? "متاح" : "مقفل"}</span></div>
-                    <div class="card-sub">${esc(section.subtitle || "")}</div>
-                </div>
-                <div class="rating-count">${mods.length} مود</div>
-            </div>
-            <div class="mods-grid${prefs.view === "list" ? " list" : ""}">
-                ${mods.map((m) => cardHtml(m, section, unlocked, installedNames.includes(m.file))).join("")}
-            </div>
-        </section>`);
-    });
-    modsPreview.innerHTML = html + blocks.join("");
-
-    const empty = total === 0 && (searchQuery || favOnly);
-    $("mdEmpty").classList.toggle("hidden", !empty);
-    if (empty) $("mdEmpty").querySelector("p").textContent = favOnly && !searchQuery ? "لم تضف أي مود إلى المفضلة بعد." : "جرّب كلمة بحث أخرى.";
-    updateStats();
-}
-
-modsPreview.addEventListener("click", (e) => {
-    const holder = e.target.closest("[data-file]");
-    if (!holder) return;
-    const mod = allMods.find((m) => m.file === holder.dataset.file);
-    if (!mod) return;
-    const act = e.target.closest("[data-act]")?.dataset.act;
-
-    if (act === "fav") {
-        favs.has(mod.file) ? favs.delete(mod.file) : favs.add(mod.file);
-        lsSet("fav_mods", [...favs]);
-        renderSections();
-        return;
-    }
-    if (selecting && holder.classList.contains("mc") && !holder.classList.contains("locked")) {
-        selected.has(mod.file) ? selected.delete(mod.file) : selected.add(mod.file);
-        holder.classList.toggle("sel", selected.has(mod.file));
-        updateQueueBar();
-        return;
-    }
-    if (act === "install") install(mod);
-});
-
-function install(mod) {
-    localStorage.setItem("pending_download", JSON.stringify(modPayload(mod)));
-    window.api.openPage("downloads.html");
-}
-
-/* ── manage popup ── */
-function setDirty(d) {
-    $("manageSaveStatus").textContent = d ? "تغييرات غير محفوظة" : "لا توجد تغييرات";
-    $("manageSaveStatus").style.color = d ? "var(--warn)" : "";
-}
-function closePopup() { popup.classList.add("hidden"); }
-
-$("manageModsBtn").onclick = async () => {
-    popup.classList.remove("hidden");
-    await syncMods();
-    setDirty(false);
-};
-$("closeManageBtn").onclick = closePopup;
-popup.addEventListener("mousedown", (e) => { if (e.target === popup) closePopup(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePopup(); });
-
-async function syncMods() {
-    try {
-        const r = await window.api.getModsList();
-        if (!r?.success) return showNotify("تعذّر تحميل قائمة المودات", "error");
-        currentMods = Array.isArray(r.files) ? [...r.files] : [];
-        pendingMods = [...currentMods];
-        updateStats();
-        renderModsList();
-    } catch { showNotify("فشلت المزامنة", "error"); }
-}
-
-function renderModsList() {
-    $("manageCount").textContent = pendingMods.length;
-    if (!pendingMods.length) {
-        modsList.innerHTML = `<div class="empty-line">لا توجد مودات. اضغط «إضافة ملف» للبدء.</div>`;
-        return;
-    }
-    modsList.innerHTML = pendingMods.map((file, i) => {
-        const name = baseName(file);
-        const data = allMods.find((m) => m.file === name);
-        return `
-        <div class="manage-row">
-            <div class="manage-thumb">${data?.img ? `<img src="${esc(data.img)}" alt="">` : ic("file")}</div>
-            <div class="grow" style="min-width:0">
-                <div class="manage-name">${esc(data?.name || name)}</div>
-                <div class="manage-file ltr">${esc(name)}</div>
-            </div>
-            <button class="btn btn-sm btn-icon btn-danger" data-rm="${i}" title="إزالة">${ic("x", "sm")}</button>
-        </div>`;
-    }).join("");
-}
-modsList.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-rm]");
-    if (!b) return;
-    pendingMods.splice(Number(b.dataset.rm), 1);
-    setDirty(true);
-    renderModsList();
-});
-
-$("addModBtn").onclick = async () => {
-    const btn = $("addModBtn");
-    btn.disabled = true;
-    const r = await window.api.addModFile();
-    btn.disabled = false;
-    if (!r?.success || !r.files?.length) return;
-
-    let added = 0;
-    r.files.forEach((fp) => {
-        const n = baseName(fp);
-        if (!pendingMods.some((f) => baseName(f) === n)) { pendingMods.push(fp); added++; }
-    });
-    if (added) {
-        setDirty(true);
-        renderModsList();
-        showNotify(`تمت إضافة ${added} ملف`);
-    } else showNotify("الملفات موجودة مسبقاً في القائمة", "error");
-};
-
-$("deleteAllBtn").onclick = async () => {
-    if (!pendingMods.length) return;
-    const ok = await askConfirm({
-        title: "إزالة كل المودات من القائمة؟",
-        message: "لن يُطبَّق الحذف حتى تضغط «حفظ التغييرات».",
-        confirmText: "إزالة الكل", danger: true
-    });
-    if (!ok) return;
-    pendingMods = [];
-    setDirty(true);
-    renderModsList();
-};
-
-$("saveModsBtn").onclick = async () => {
-    const btn = $("saveModsBtn");
-    btn.disabled = true;
-    try {
-        const r = await window.api.saveMods(pendingMods);
-        if (!r?.success) return showNotify("فشل الحفظ", "error");
-        currentMods = pendingMods.map(baseName);
-        setDirty(false);
-        closePopup();
-        renderSections();
-        showNotify("تم حفظ المودات");
-    } catch (e) {
-        console.error(e);
-        showNotify("فشل الحفظ", "error");
-    } finally { btn.disabled = false; }
-};
-
-/* ── search ── */
-const searchInput = $("modsSearch");
-const clearBtn = $("clearSearch");
-searchInput.addEventListener("input", () => {
-    searchQuery = searchInput.value.trim();
-    clearBtn.classList.toggle("hidden-btn", !searchQuery);
-    renderSections();
-});
-clearBtn.addEventListener("click", () => {
-    searchInput.value = ""; searchQuery = "";
-    clearBtn.classList.add("hidden-btn");
-    searchInput.focus();
-    renderSections();
-});
-
-/* ── init ── */
+/* ── بدء ── */
 (async () => {
-    if (!(await checkAuth())) return;
-    if (!(await fetchModsFromServer())) {
-        $("mdSkeleton").classList.add("hidden");
-        modsPreview.innerHTML = `<div class="empty"><div class="icon-tile err">${ic("wifi", "lg")}</div><h3>تعذّر تحميل المودات</h3><p>تحقق من اتصالك بالإنترنت ثم أعد فتح الصفحة.</p></div>`;
-        return showNotify("فشل تحميل المودات من الخادم", "error");
-    }
-    await syncMods();
-    renderTabs();
-    syncToolbar();
-    renderSections();
+  const S = await window.CA.ready; if (!S) return;
+  const [L] = await Promise.all([window.CA.getLibrary(true), refreshInstalled().catch(() => {})]);
+  if (!L || !L.success) { $("grid").innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon-tile err">${ic("wifi", "lg")}</div><h3>تعذّر تحميل المكتبة</h3><p>${esc((L && L.message) || "تحقق من الاتصال")}</p></div>`; return; }
+  LIB = L; $("viewSeg").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.view === view)); $("densitySeg").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.d === density));
+  render();
+  const f = (() => { try { const v = sessionStorage.getItem("ca_focus"); sessionStorage.removeItem("ca_focus"); return v; } catch { return null; } })();
+  if (f) setTimeout(() => focusCard(Number(f)), 300);
 })();

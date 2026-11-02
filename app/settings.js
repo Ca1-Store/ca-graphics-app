@@ -2,7 +2,6 @@
    SETTINGS — الإعدادات
    ========================================================================== */
 const { esc, toast } = window.CA;
-const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
 const $ = (id) => document.getElementById(id);
 
 let currentPath = "";
@@ -64,17 +63,11 @@ $("savePathBtn").onclick = async () => {
 $("openModsManager").onclick = () => window.api.openPage("addons.html");
 
 async function checkConnection() {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 7000);
     const pill = $("connectionStatus").parentElement;
-    try {
-        await fetch(`${BACKEND_URL}/api/packs`, { signal: ctl.signal });
-        $("connectionStatus").textContent = "متصل";
-        pill.className = "status-pill online";
-    } catch {
-        $("connectionStatus").textContent = "غير متصل";
-        pill.className = "status-pill offline";
-    } finally { clearTimeout(t); }
+    const r = await window.api.v4.get("/api/v4/config");
+    const ok = r && r.success;
+    $("connectionStatus").textContent = ok ? "متصل" : "غير متصل";
+    pill.className = "status-pill " + (ok ? "online" : "offline");
 }
 
 window.addEventListener("keydown", (e) => { if (e.key === "F11") { e.preventDefault(); window.api.fullscreen(); } });

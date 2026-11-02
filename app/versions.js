@@ -3,7 +3,6 @@
    ========================================================================== */
 const { ic, esc, toast, confirm: askConfirm } = window.CA;
 
-const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
 const ADMIN_DISCORD_ID = "1336347875206234292";
 
 const packsContainer = document.getElementById("packsContainer");
@@ -32,9 +31,8 @@ function fmtDate(d) {
 /* ── DATA ── */
 async function fetchPacksFromServer() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/packs`);
-        const data = await res.json();
-        if (data.success) { packs = data.packs || []; return true; }
+        const data = await window.CA.getLibrary(true);
+        if (data && data.success) { packs = data.packs || []; return true; }
         return false;
     } catch (err) {
         console.error("Failed to fetch packs:", err);
@@ -43,10 +41,10 @@ async function fetchPacksFromServer() {
 }
 
 async function checkAuth() {
-    const r = await window.api.auth.check();
-    if (!r.success) { window.api.openPage("login.html"); return false; }
-    userPlans = r.plans || [];
-    currentDiscordId = r.discordId || null;
+    const S = await window.CA.ready;
+    if (!S) return false;
+    userPlans = S.plans || [];
+    currentDiscordId = S.discordId || null;
     return true;
 }
 
@@ -176,7 +174,7 @@ function refreshCard(packId) {
     const old = packsContainer.querySelector(`[data-pack="${CSS.escape(packId)}"].pk`);
     if (!pack || !old) return;
     clearInterval(imageTimers[packId]);
-    old.replaceWith(createPackCard(pack, userPlans.includes(pack.plan)));
+    old.replaceWith(createPackCard(pack, pack.unlocked !== false && (pack.unlocked === true || userPlans.includes(pack.plan))));
 }
 
 function loadPacks() {
@@ -197,9 +195,9 @@ function loadPacks() {
         newest: (a, b) => dateOf(b) - dateOf(a),
         level: (a, b) => (Number(b.level) || 0) - (Number(a.level) || 0)
     };
-    const ordered = [...packs].sort((a, b) => (userPlans.includes(b.plan) - userPlans.includes(a.plan)) || (packFavs.has(b.id) - packFavs.has(a.id)) || sorters[packSort](a, b));
+    const ordered = [...packs].sort((a, b) => ((b.unlocked ? 1 : 0) - (a.unlocked ? 1 : 0)) || (packFavs.has(b.id) - packFavs.has(a.id)) || sorters[packSort](a, b));
     ordered.forEach((pack) => {
-        const unlocked = userPlans.includes(pack.plan);
+        const unlocked = pack.unlocked === true || (pack.unlocked === undefined && userPlans.includes(pack.plan));
         if (unlocked) unlockedCount++;
         if ((packFilter === "open" && !unlocked) || (packFilter === "locked" && unlocked) || (packFilter === "fav" && !packFavs.has(pack.id))) return;
         shown++;
@@ -297,12 +295,12 @@ async function startInstall(pack) {
     });
     if (!ok) return;
 
+    const pf = await window.api.lib.preflight({ type: "pack", id: pack.id, version: ver.version });
+    if (pf && pf.code === "NO_SPACE") { showNotify("المساحة الحرة لا تكفي لتثبيت هذا الباك", "error"); return; }
     localStorage.setItem("pending_download", JSON.stringify({
-        url: ver.url || pack.url,
         name: `${pack.name} v${ver.version}`,
         productId: pack.id,
         type: "pack",
-        deleteFirst: true,
         version: ver.version
     }));
     window.api.openPage("downloads.html");

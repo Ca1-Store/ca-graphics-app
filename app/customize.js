@@ -2,34 +2,31 @@
    CUSTOMIZE — التخصيص
    ========================================================================== */
 const { ic, esc, toast, confirm: askConfirm } = window.CA;
-const BACKEND_URL = "https://ca-backend-app-production.up.railway.app";
 
-const customizations = [
-    { id: "no_water",    title: "بدون ماء",   en: "No Water",    icon: "waves",    description: "إزالة تأثير الماء من اللعبة لتحسين الأداء" },
-    { id: "no_snow",     title: "بدون ثلج",   en: "No Snow",     icon: "snow",     description: "إزالة تأثير الثلج من اللعبة لتحسين الأداء" },
-    { id: "no_mountain", title: "بدون جبال",  en: "No Mountain", icon: "mountain", description: "إزالة الجبال من اللعبة لتحسين الأداء" },
-    { id: "no_rain",     title: "بدون مطر",   en: "No Rain",     icon: "rain",     description: "إزالة تأثير المطر من اللعبة لتحسين الأداء" }
-];
+const ICON_BY_ID = { no_water: "waves", no_snow: "snow", no_mountain: "mountain", no_rain: "rain" };
+const SAFE_ICONS = new Set(["waves", "snow", "mountain", "rain", "sliders", "palette", "zap", "eye", "layers", "package", "gauge"]);
+let customizations = [];
+let LIBRARY = null;
 
 const grid = document.getElementById("customizationsGrid");
 let installed = {};
 
-async function fetchCustomizations() {
-    try {
-        const r = await fetch(`${BACKEND_URL}/api/customizations`);
-        const d = await r.json();
-        return d.customizations || null;
-    } catch (e) { console.error(e); return null; }
+async function loadLib() {
+    const L = await window.CA.getLibrary(true);
+    if (!L || !L.success) return false;
+    LIBRARY = L;
+    customizations = (L.customizations || []).map((c) => ({
+        id: c.id, title: c.name, en: "", description: c.description || "", warning: c.warning || "",
+        icon: SAFE_ICONS.has(c.icon) ? c.icon : (ICON_BY_ID[c.id] || "sliders")
+    }));
+    return true;
 }
 
 async function checkInstalledStatus() {
     const out = {};
-    for (const c of customizations) {
-        try {
-            const r = await window.api.customizations.checkInstalled(c.id);
-            out[c.id] = !!(r && r.success && r.installed);
-        } catch { out[c.id] = false; }
-    }
+    let ids = [];
+    try { const r = await window.api.lib.installed(); ids = (r && r.customizations) || []; } catch {}
+    customizations.forEach((c) => { out[c.id] = ids.includes(c.id); });
     return out;
 }
 
@@ -45,7 +42,7 @@ function render() {
                     <span class="pill ${on ? "ok" : ""}">${on ? "مثبّت" : "غير مثبّت"}</span>
                 </div>
             </div>
-            <p class="cust-desc">${esc(c.description)}</p>
+            <p class="cust-desc">${esc(c.description)}</p>${c.warning ? `<p class="hint" style="color:var(--warn);margin-top:6px">${esc(c.warning)}</p>` : ""}
             <div class="pack-actions">
                 ${on ? `
                     <button class="btn grow" data-act="install" data-id="${c.id}">${ic("refresh")}إعادة التثبيت</button>
@@ -66,12 +63,7 @@ function idle(btn) { btn.disabled = false; btn.innerHTML = btn.dataset.html; }
 async function install(id, btn) {
     busy(btn, "جاري التثبيت...");
     try {
-        const data = await fetchCustomizations();
-        if (!data) { toast("تعذّر الاتصال بالخادم", "error"); return idle(btn); }
-        const url = data[id] && data[id].download_url;
-        if (!url) { toast("رابط التحميل غير متوفر", "error"); return idle(btn); }
-
-        const r = await window.api.customizations.install(id, url);
+        const r = await window.api.lib.install({ type: "custom", id, overwrite: true });
         if (r && r.success) {
             toast("تم التثبيت بنجاح");
             installed = await checkInstalledStatus();
@@ -93,7 +85,7 @@ async function remove(id, btn) {
     if (!ok) return;
     busy(btn, "جاري الحذف...");
     try {
-        const r = await window.api.customizations.delete(id);
+        const r = await window.api.lib.remove({ type: "custom", id });
         if (r && r.success) {
             toast("تم الحذف بنجاح");
             installed = await checkInstalledStatus();
@@ -117,7 +109,9 @@ grid.addEventListener("click", (e) => {
 });
 
 (async () => {
-    render();
+    const S = await window.CA.ready; if (!S) return;
+    grid.innerHTML = '<div class="skel"></div><div class="skel"></div>';
+    if (!(await loadLib())) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon-tile err">${ic("wifi", "lg")}</div><h3>تعذّر تحميل التخصيصات</h3><p>تحقق من الاتصال ثم أعد فتح الصفحة.</p></div>`; return; }
     installed = await checkInstalledStatus();
     render();
 })();
@@ -156,12 +150,9 @@ async function loadInstalled() {
 }
 async function loadLibrary() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/presets`);
-        const d = await res.json();
-        if (!d.success && !Array.isArray(d.presets)) throw new Error("bad");
-        pf.lib = (d.presets || []).map((p) => ({
-            ...p, file: p.file || (String(p.url || "").split(/[?#]/)[0].split("/").pop() || `${p.name}.ini`)
-        })).filter((p) => p.url && /\.ini$/i.test(p.file));
+        const L = LIBRARY || await window.CA.getLibrary(true);
+        if (!L || !L.success) throw new Error("bad");
+        pf.lib = (L.presets || []).filter((p) => p.file && /\.ini$/i.test(p.file));
         pf.libOk = true;
     } catch (e) { console.error(e); pf.lib = []; pf.libOk = false; }
 }
@@ -321,13 +312,13 @@ $("pfLib").addEventListener("click", async (e) => {
     if (!item || pf.busy.has(item.file)) return;
     pf.busy.add(item.file); renderPresets();
     try {
-        let r = await window.api.presets.install(item.file, item.url, false);
+        let r = await window.api.lib.install({ type: "preset", id: item.id, overwrite: false });
         if (r && r.exists) {
             pf.busy.delete(item.file); renderPresets();
             const ok = await askConfirm({ title: "الفلتر موجود مسبقاً", message: `هل تريد إعادة تنزيل «${item.name || stem(item.file)}» واستبداله؟`, confirmText: "استبدال" });
             if (!ok) return;
             pf.busy.add(item.file); renderPresets();
-            r = await window.api.presets.install(item.file, item.url, true);
+            r = await window.api.lib.install({ type: "preset", id: item.id, overwrite: true });
         }
         if (r && r.success) toast(`تم تنزيل «${item.name || stem(item.file)}»`);
         else toast((r && r.message) || "فشل التنزيل", "error");

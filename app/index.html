@@ -2,144 +2,59 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; media-src 'self' http: https:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ca Store - الرئيسية</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="pages.css">
+    <link rel="stylesheet" href="ui.css">
 </head>
 <body data-page="index">
     <div class="bg"></div>
 
     <main class="content">
         <div class="content-inner">
-
-            <!-- HERO -->
-            <section class="hero card">
-                <img class="hero-mark" src="../assets/logo.png" alt="">
-                <div class="hero-body">
-                    <div class="eyebrow">لوحة التحكم</div>
-                    <h1 class="hero-title">أهلاً بعودتك،<br><span id="welcomeName">...</span></h1>
-                    <p class="hero-sub">ثبّت باكات الجرافيكس والمودات، وحسّن أداء FiveM، وتابع حالة نظامك من مكان واحد.</p>
-                    <div class="hero-actions">
-                        <button class="btn btn-primary" onclick="window.api.openPage('versions.html')" data-ic="grid">تصفّح الباكات</button>
-                        <button class="btn" onclick="window.api.openPage('addons.html')" data-ic="package">مكتبة المودات</button>
-                    </div>
+            <section class="feat" id="heroFeat">
+                <div>
+                    <span class="badge hi" id="heroTag">أهلاً بك</span>
+                    <h3 id="heroTitle">أهلاً بعودتك</h3>
+                    <p id="heroDesc">ثبّت باكات الجرافيكس والمودات، وحسّن أداء FiveM، وتابع كل جديد من مكان واحد.</p>
                 </div>
-                <div class="hero-side">
-                    <div class="mini">
-                        <div class="mini-top">
-                            <span class="mini-label">الاشتراك</span>
-                            <span class="mini-value" id="welcomePlan">جاري التحميل...</span>
-                        </div>
-                        <div class="progress"><div class="progress-fill" style="width:100%"></div></div>
-                    </div>
-                    <div class="mini">
-                        <div class="mini-top">
-                            <span class="mini-label">الاتصال بالخادم</span>
-                            <span class="mini-value" id="connectionStatus">جاري الفحص...</span>
-                        </div>
-                        <div class="progress"><div class="progress-fill" id="connectionBar" style="width:20%"></div></div>
-                    </div>
-                </div>
+                <button class="btn btn-primary" id="heroBtn" data-open="addons.html" data-ic="package">تصفّح المكتبة</button>
             </section>
 
-            <!-- STATS -->
-            <section class="stat-grid">
-                <div class="stat">
-                    <div class="stat-top"><div class="icon-tile sm" data-ic="grid"></div></div>
-                    <div class="stat-value" id="packsCount">0</div>
-                    <div class="stat-label">باكات مفعّلة لحسابك</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-top"><div class="icon-tile sm" data-ic="package"></div></div>
-                    <div class="stat-value" id="modsCount">0</div>
-                    <div class="stat-label">مودات مثبّتة</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-top"><div class="icon-tile sm" data-ic="eye"></div></div>
-                    <div class="stat-value sm" id="reshadeStatus">—</div>
-                    <div class="stat-label">حالة ReShade</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-top"><div class="icon-tile sm" data-ic="clock"></div></div>
-                    <div class="stat-value sm" id="lastUpdate" style="font-size:14px">—</div>
-                    <div class="stat-label">آخر تثبيت</div>
-                </div>
+            <section class="stats4" style="margin-top:16px">
+                <div class="kpi"><div class="k">مودات متاحة لك</div><div class="v" id="kMods">—</div><div class="s" id="kModsS"></div></div>
+                <div class="kpi"><div class="k">مثبّتة على جهازك</div><div class="v" id="kInst">—</div><div class="s" id="kInstS"></div></div>
+                <div class="kpi"><div class="k">اشتراكك</div><div class="v" id="kPlan" style="font-size:24px">—</div><div class="s" id="kPlanS"></div></div>
+                <div class="kpi"><div class="k">حالة FiveM</div><div class="v" id="kFivem" style="font-size:24px">—</div><div class="s" id="kFivemS"></div></div>
             </section>
 
-            <div class="two-col">
-                <!-- QUICK -->
-                <section class="card card-pad">
-                    <div class="card-head">
-                        <div>
-                            <div class="card-title">وصول سريع</div>
-                            <div class="card-sub">انتقل مباشرة إلى ما تحتاجه</div>
-                        </div>
-                    </div>
-                    <div class="quick-grid">
-                        <button class="quick" onclick="window.api.openPage('versions.html')">
-                            <span class="icon-tile" data-ic="grid"></span>
-                            <span class="quick-title">باكات الجرافيكس</span>
-                            <span class="quick-desc">ثبّت أحدث إصدارات CA الرسمية</span>
-                        </button>
-                        <button class="quick" onclick="window.api.openPage('addons.html')">
-                            <span class="icon-tile" data-ic="package"></span>
-                            <span class="quick-title">المودات</span>
-                            <span class="quick-desc">أدر ملفات RPF والإضافات</span>
-                        </button>
-                        <button class="quick" onclick="window.api.openPage('performance.html')">
-                            <span class="icon-tile" data-ic="zap"></span>
-                            <span class="quick-title">تحسين الأداء</span>
-                            <span class="quick-desc">زِد الـ FPS ونظّف النظام</span>
-                        </button>
-                        <button class="quick" onclick="window.api.openPage('settings.html')">
-                            <span class="icon-tile" data-ic="sliders"></span>
-                            <span class="quick-title">الإعدادات</span>
-                            <span class="quick-desc">حدّد مسار FiveM وخيارات البرنامج</span>
-                        </button>
-                    </div>
+            <div class="cols2">
+                <section class="panel">
+                    <h3 data-ic="sparkle">جديد المكتبة <span class="more" data-open="addons.html" style="cursor:pointer">عرض الكل</span></h3>
+                    <div class="mgrid" id="newGrid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"><div class="skel" style="height:150px"></div><div class="skel" style="height:150px"></div><div class="skel" style="height:150px"></div></div>
                 </section>
-
-                <!-- SYSTEM -->
-                <section class="card card-pad">
-                    <div class="card-head">
-                        <div>
-                            <div class="card-title">حالة النظام</div>
-                            <div class="card-sub">الوضع الحالي للبيئة والبرنامج</div>
-                        </div>
-                    </div>
-                    <div class="sys-list">
-                        <div class="sys-row">
-                            <div class="icon-tile sm" data-ic="monitor"></div>
-                            <div class="sys-meta">
-                                <div class="sys-title">FiveM</div>
-                                <div class="sys-sub">حالة التثبيت</div>
-                            </div>
-                            <div class="status-pill pending" id="fivemStatus">—</div>
-                        </div>
-                        <div class="sys-row">
-                            <div class="icon-tile sm" data-ic="folder"></div>
-                            <div class="sys-meta">
-                                <div class="sys-title">مسار FiveM</div>
-                                <div class="sys-sub ltr path-text" id="pathsStatus">—</div>
-                            </div>
-                        </div>
-                        <div class="sys-row">
-                            <div class="icon-tile sm" data-ic="wifi"></div>
-                            <div class="sys-meta">
-                                <div class="sys-title">الإنترنت</div>
-                                <div class="sys-sub">الوصول إلى خدمات المتجر</div>
-                            </div>
-                            <div class="status-pill pending" id="connectionPill">—</div>
-                        </div>
-                    </div>
+                <section class="panel">
+                    <h3 data-ic="megaphone">آخر الأخبار <span class="more" data-open="news.html" style="cursor:pointer">كل الأخبار</span></h3>
+                    <div class="feed" id="newsFeed"><div class="skel" style="height:60px"></div></div>
                 </section>
             </div>
 
+            <section class="panel" style="margin-top:14px">
+                <h3 data-ic="zap">وصول سريع</h3>
+                <div class="quick-grid">
+                    <button class="quick" data-open="versions.html"><span class="icon-tile" data-ic="grid"></span><span class="quick-title">باكات الجرافيكس</span><span class="quick-desc">ثبّت أحدث إصدارات CA الرسمية</span></button>
+                    <button class="quick" data-open="customize.html"><span class="icon-tile" data-ic="sliders"></span><span class="quick-title">التخصيص والفلاتر</span><span class="quick-desc">فلاتر ReShade وتخصيصات اللعبة</span></button>
+                    <button class="quick" data-open="profiles.html"><span class="icon-tile" data-ic="layers"></span><span class="quick-title">ملفات التعريف</span><span class="quick-desc">احفظ مجموعتك وطبّقها بضغطة</span></button>
+                    <button class="quick" data-open="diagnostics.html"><span class="icon-tile" data-ic="activity"></span><span class="quick-title">التشخيص</span><span class="quick-desc">افحص جاهزية جهازك والاتصال</span></button>
+                </div>
+            </section>
         </div>
     </main>
 
     <div id="notify" class="notification"></div>
+    <script src="icons-extra.js"></script>
     <script src="shell.js"></script>
     <script src="home.js"></script>
 </body>

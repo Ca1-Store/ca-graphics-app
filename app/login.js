@@ -20,7 +20,7 @@ async function loginWithDiscord() {
             btn.innerHTML = ic("check") + "تم تسجيل الدخول";
             setStatus(`أهلاً ${r.username}! نسختك: ${plans || "بدون اشتراك"}`, "success");
             try { sessionStorage.removeItem("ca_user"); } catch {}
-            setTimeout(() => window.api.openPage("index.html"), 1100);
+            setTimeout(() => window.api.openPage("splash.html"), 1100);
         } else {
             setStatus((r && r.message) || "فشل تسجيل الدخول", "error");
             reset();

@@ -1,6 +1,6 @@
 {
   "name": "ca-graphics-app",
-  "version": "1.2.11",
+  "version": "2.0.0",
   "description": "CA Store Graphics Installer",
   "main": "main.js",
   "scripts": {
@@ -14,7 +14,8 @@
   "type": "commonjs",
   "devDependencies": {
     "electron": "^41.1.1",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "@electron/fuses": "^1.8.0"
   },
   "dependencies": {
     "adm-zip": "^0.5.17",
@@ -35,7 +36,17 @@
   "build": {
     "appId": "com.castore.graphicsapp",
     "productName": "Ca App",
-    "files": ["main.js", "preload.js", "app/**/*", "assets/**/*", "build/**/*", "package.json"],
+    "files": [
+      "main.js",
+      "v4.js",
+      "sounds.js",
+      "preload.js",
+      "lib/**/*",
+      "app/**/*",
+      "assets/**/*",
+      "build/**/*",
+      "package.json"
+    ],
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico"
@@ -50,6 +61,8 @@
       "provider": "github",
       "owner": "Ca1-Store",
       "repo": "ca-graphics-app"
-    }
+    },
+    "afterPack": "build/afterPack.js",
+    "asar": true
   }
 }

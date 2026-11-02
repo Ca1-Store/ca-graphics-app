@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; media-src 'self' http: https:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ca Store - ساوندات الأسلحة</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="pages.css">
+    <link rel="stylesheet" href="ui.css">
+</head>
+<body data-page="sounds">
+    <div class="bg"></div>
+    <main class="content"><div class="content-inner">
+        <section class="panel" id="gtaBox"><div class="skel" style="height:60px"></div></section>
+        <div class="chips" style="margin:16px 0 12px" id="tabsS">
+            <button class="cchip on" data-t="lib" data-ic="package">مكتبة الساوندات</button>
+            <button class="cchip" data-t="mine" data-ic="folder">ساوندات جهازي والاسترجاع</button>
+        </div>
+        <div id="pLib"><div id="grid" class="mgrid"><div class="skel"></div><div class="skel"></div></div></div>
+        <div id="pMine" class="hidden"></div>
+    </div></main>
+    <div id="notify" class="notification"></div>
+    <script src="icons-extra.js"></script>
+    <script src="shell.js"></script>
+    <script src="sounds.js"></script>
+</body>
+</html>

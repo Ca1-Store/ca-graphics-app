@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; media-src 'self' http: https:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ca Store - التشخيص</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="pages.css">
+    <link rel="stylesheet" href="ui.css">
+</head>
+<body data-page="diagnostics">
+    <div class="bg"></div>
+    <main class="content"><div class="content-inner">
+        <div class="toolrow"><p style="color:var(--text-2);font-size:13px;flex:1">فحص سريع لجاهزية جهازك والاتصال بالخادم. يمكنك تصدير التقرير وإرساله للدعم.</p><button class="btn" id="rerun" data-ic="activity">إعادة الفحص</button><button class="btn btn-primary" id="exp" data-ic="download">تصدير التقرير</button></div>
+        <section class="stats4" id="kp"></section>
+        <div id="checks" style="display:flex;flex-direction:column;gap:10px;margin-top:16px"><div class="skel" style="height:60px"></div></div>
+    </div></main>
+    <div id="notify" class="notification"></div>
+    <script src="icons-extra.js"></script>
+    <script src="shell.js"></script>
+    <script src="diagnostics.js"></script>
+</body>
+</html>

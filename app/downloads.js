@@ -320,43 +320,26 @@ async function runItem(pending) {
     resetCells(); setProgress(0, "0");
     startTick();
     try {
-        if (pending.deleteFirst && pending.type === "pack") {
-            setStatus("جاري أخذ نسخة احتياطية...", "warn");
-            setStep("download");
-            try { await window.api.backupGraphics?.(); } catch (e) { console.error(e); }
-            setStatus("جاري حذف الجرافيكس القديمة...", "warn");
-            await window.api.deleteGraphics();
-        }
-
         let result = null;
         for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
             setStep("download");
             setStatus(attempt ? `إعادة المحاولة (${attempt}/${MAX_RETRY})...` : "جاري التحميل...", attempt ? "warn" : "info");
             controls.classList.remove("hidden");
             startPolling();
-            result = await window.api.startDownload(pending.url, pending.productId, pending.name);
+            result = await window.api.lib.install({ type: pending.type, id: pending.productId, version: pending.version, overwrite: true });
             if (result && (result.success || result.canceled)) break;
             if (cur.canceled || attempt === MAX_RETRY) break;
+            // لا نعيد المحاولة على أخطاء نهائية
+            if (result && ["LOCKED", "NO_FIVEM", "NO_SPACE", "HASH_MISMATCH", "MAINTENANCE", "BUSY", "TOO_BIG"].includes(result.code)) break;
             stopPolling();
             setStatus(`انقطع التحميل، سأعيد المحاولة خلال 3 ثوانٍ (${attempt + 1}/${MAX_RETRY})`, "warn");
             await sleep(3000);
         }
+        stopPolling();
         controls.classList.add("hidden");
         if (result && result.canceled) { canceled(); return "cancel"; }
-        if (!result || !result.success) { fail(); return "fail"; }
+        if (!result || !result.success) { fail(result && result.message); return "fail"; }
 
-        setProgress(100, "—");
-        applyStage("extracting");
-
-        if (pending.type === "pack") {
-            const inst = await window.api.runInstall(result.zipPath, pending.productId);
-            if (!inst || !inst.success) { fail(); return "fail"; }
-            return "ok";
-        }
-        applyStage("copying");
-        const r = await window.api.downloadMod(pending.url, pending.fileName || pending.productId);
-        stopPolling();
-        if (r && r.success === false) { fail(); return "fail"; }
         applyStage("done", 100, null);
         setProgress(100, "مكتمل");
         logOnce("ok");
