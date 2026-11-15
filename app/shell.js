@@ -80,7 +80,12 @@
         document.body.prepend(wrap.firstChild);
     }
     /* رابط صورة آمن للعرض (http/https فقط) */
-    const safeImg = (u) => /^https?:\/\//i.test(String(u || "")) ? String(u) : "";
+    const safeImg = (u) => {
+        u = String(u || "").trim();
+        if (/^https?:\/\//i.test(u)) return u;
+        const m = u.match(/^(?:\.\.\/)?assets\/([\w\-. ()]+\.(?:png|jpe?g|webp|gif|avif))$/i);   // صور مرفقة داخل البرنامج
+        return m ? "../assets/" + m[1] : "";
+    };
     const fmtNum = (n) => Number(n || 0).toLocaleString("en-US");
     function ago(iso) {
         const t = new Date(iso).getTime(); if (!t) return "";
@@ -214,6 +219,7 @@
         { page: "customize",   file: "customize.html",   icon: "sliders", label: "التخصيص والفلاتر" },
         { page: "performance", file: "performance.html", icon: "gauge",   label: "تحسين الأداء" },
         { page: "sounds",      file: "sounds.html",      icon: "waves",   label: "ساوندات الأسلحة" },
+        { page: "studio",      file: "studio.html",      icon: "palette", label: "استوديو CA" },
         { group: "حسابي" },
         { page: "downloads",   file: "downloads.html",   icon: "download",label: "التحميلات" },
         { page: "profiles",    file: "profiles.html",    icon: "layers",  label: "ملفات التعريف" },

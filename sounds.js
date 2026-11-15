@@ -58,7 +58,7 @@ module.exports = function initSounds(ctx) {
     function placeFile(sfx, targetName, srcFile, meta) {
         let st; try { st = fs.statSync(srcFile); } catch { return { ok: false, message: "تعذّر قراءة الملف" }; }
         if (!st.isFile() || st.size < 16 || st.size > MAX_RPF) return { ok: false, message: "حجم الملف غير مقبول" };
-        if (!gta.isRpf7(readHead(srcFile))) return { ok: false, message: "الملف ليس ملف صوت RPF صالحاً" };
+        { const h = readHead(srcFile); if (!gta.isRpf7(h)) return { ok: false, message: `«${path.basename(srcFile)}» ليس RPF صالحاً (بداية الملف: ${h.slice(0, 4).toString("hex")}). تأكد أنه ملف .rpf حقيقي وليس مضغوطاً أو تالفاً` }; }
         const dest = path.join(sfx, targetName), tmp = dest + ".canew";
         try {
             fs.mkdirSync(BK_DIR, { recursive: true });
@@ -74,17 +74,38 @@ module.exports = function initSounds(ctx) {
     async function extractRpfs(zipPath, tmpDir) {
         if (!unzipper) throw new Error("وحدة الأرشيف غير متوفرة");
         const dir = await unzipper.Open.file(zipPath);
-        const safe = core.zipEntriesSafe(dir.files.map((f) => f.path)); if (!safe.ok) throw new Error("الأرشيف يحتوي مسارات غير آمنة");
-        const out = []; let total = 0;
+        const out = []; let total = 0, n = 0;
         for (const f of dir.files) {
             if (f.type !== "File" || !/\.rpf$/i.test(f.path)) continue;
-            const base = path.basename(f.path); if (!gta.SOUND_FILE.test(base)) continue;
+            const base = path.basename(String(f.path).replace(/\\/g, "/"));          // نستخدم الاسم فقط — لا مسارات من الأرشيف
+            if (!gta.SOUND_FILE.test(base)) continue;
             total += Number(f.uncompressedSize) || 0; if (total > 3 * 1024 * 1024 * 1024) throw new Error("الأرشيف كبير جداً");
-            const p = path.join(tmpDir, base);
+            const p = path.join(tmpDir, (++n) + "_" + base);
             await new Promise((res, rej) => f.stream().pipe(fs.createWriteStream(p)).on("finish", res).on("error", rej));
             out.push({ name: base, file: p });
         }
+        out.listed = dir.files.filter((f) => f.type === "File").slice(0, 6).map((f) => path.basename(String(f.path)));
         return out;
+    }
+    /* rar / 7z عبر أداة tar المدمجة في ويندوز 10+ (bsdtar) */
+    function extractViaTar(src, tmpDir) {
+        return new Promise((resolve, reject) => {
+            const sub = fs.mkdtempSync(path.join(tmpDir, "x-"));
+            require("child_process").execFile("tar", ["-xf", src, "-C", sub], { timeout: 5 * 60 * 1000, windowsHide: true }, (err) => {
+                if (err) return reject(new Error("تعذّر فك الضغط تلقائياً. فك الضغط بنفسك (WinRAR / 7-Zip) ثم اختر ملف .rpf مباشرة"));
+                const out = [], all = []; let n = 0;
+                const walk = (d, depth) => {
+                    if (depth > 8 || out.length > 60) return;
+                    let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+                    for (const e of ents) {
+                        const p = path.join(d, e.name);
+                        if (e.isDirectory()) walk(p, depth + 1);
+                        else if (e.isFile()) { all.push(e.name); if (/\.rpf$/i.test(e.name) && gta.SOUND_FILE.test(e.name)) out.push({ name: e.name, file: p }); }
+                    }
+                };
+                walk(sub, 0); out.listed = all.slice(0, 6); n += out.length; resolve(out);
+            });
+        });
     }
     const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} };
 
@@ -92,11 +113,19 @@ module.exports = function initSounds(ctx) {
         const g = needRoot(); if (!g) return { success: false, code: "NO_GTA", message: "حدّد مسار GTA V أولاً" };
         const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "casnd-")); const items = [];
         try {
+            const problems = []; const listed = [];
             for (const s of srcs) {
-                if (/\.zip$/i.test(s)) items.push(...await extractRpfs(s, tmp));
-                else if (/\.rpf$/i.test(s)) items.push({ name: path.basename(s), file: s });
+                let kind = "unknown", head = Buffer.alloc(0);
+                try { head = readHead(s); kind = gta.sniff(head); } catch { problems.push(path.basename(s) + ": تعذّرت قراءته"); continue; }
+                try {
+                    if (kind === "rpf") items.push({ name: path.basename(s), file: s });
+                    else if (kind === "zip") { let got; try { got = await extractRpfs(s, tmp); } catch (e) { got = await extractViaTar(s, tmp); } items.push(...got); if (!got.length) { listed.push(...(got.listed || [])); problems.push(path.basename(s) + ": الأرشيف لا يحتوي ملف .rpf" + (got.listed && got.listed.length ? " (بداخله: " + got.listed.join("، ") + ")" : "")); } }
+                    else if (kind === "rar" || kind === "7z") { const got = await extractViaTar(s, tmp); items.push(...got); if (!got.length) problems.push(path.basename(s) + ": الأرشيف لا يحتوي ملف .rpf" + (got.listed && got.listed.length ? " (بداخله: " + got.listed.join("، ") + ")" : "")); }
+                    else problems.push(`${path.basename(s)}: ليس RPF ولا أرشيفاً مدعوماً (بداية الملف: ${head.slice(0, 4).toString("hex")})`);
+                } catch (e) { problems.push(path.basename(s) + ": " + gta.errMessage(e)); }
             }
-            if (!items.length) return { success: false, message: "لم نجد ملفات صوت (.rpf) في اختيارك" };
+            void listed;
+            if (!items.length) return { success: false, message: problems.length ? problems.slice(0, 3).join(" — ") : "لم نجد ملفات صوت (.rpf) في اختيارك" };
             const results = [], unmatched = [];
             for (const it of items) {
                 const t = gta.matchTarget(g.sfx, it.name);
@@ -174,7 +203,7 @@ module.exports = function initSounds(ctx) {
     });
     ipcMain.handle("gta:installLocal", async () => {
         if (getBusy()) return { success: false, message: "هناك عملية جارية", code: "BUSY" };
-        const r = await dialog.showOpenDialog(getMain(), { title: "اختر ملفات الساوند (.rpf أو .zip)", properties: ["openFile", "multiSelections"], filters: [{ name: "Sound", extensions: ["rpf", "zip"] }] });
+        const r = await dialog.showOpenDialog(getMain(), { title: "اختر ملفات الساوند (.rpf أو أرشيف)", properties: ["openFile", "multiSelections"], filters: [{ name: "Sound (rpf / zip / rar / 7z)", extensions: ["rpf", "zip", "rar", "7z"] }, { name: "كل الملفات", extensions: ["*"] }] });
         if (r.canceled || !r.filePaths.length) return { success: false, canceled: true };
         setBusy(true); try { return await installPaths(r.filePaths.slice(0, 20), { source: "local" }); } finally { setBusy(false); }
     });
