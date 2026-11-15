@@ -19,7 +19,7 @@
     };
     const arOf = (k) => AR[k] || "";
 
-    const S = { mod: "tc", text: "", base: "", name: "", model: null, baseModel: null, sel: -1, q: "", filter: "all", items: [], hist: [], lastPush: 0, struct: 0, split: 52, tune: { bri: 100, sat: 100, con: 100, temp: 0 },
+    const S = { pvBase: "day", pvImgs: [], baseVer: 0, isNew: false, mod: "tc", text: "", base: "", name: "", model: null, baseModel: null, sel: -1, q: "", filter: "all", items: [], hist: [], lastPush: 0, struct: 0, split: 52, tune: { bri: 100, sat: 100, con: 100, temp: 0 },
         fx: { info: null, name: "", text: "", model: null, sel: new Set(), mult: 1, ints: false, raw: false, installed: "" } };
 
     /* ============================ أدوات ============================ */
@@ -41,6 +41,7 @@
 
     /* يعيد القيم الأصلية لكل وسم من الملف الأساسي (للمقارنة والمعاينة) */
     function rebase() {
+        S.baseVer++;
         const bm = TC.parse(S.base); S.baseModel = bm.error ? null : bm;
         const seen = new Map();
         if (S.baseModel) S.baseModel.mods.forEach((m, mi) => { const c = new Map(); m.tags.forEach((t) => { const n = (c.get(t.tag) || 0); c.set(t.tag, n + 1); seen.set(mi + "|" + t.tag + "|" + n, t); }); });
@@ -70,7 +71,9 @@
             ${S.mod !== "fx" ? `<span class="st-file ${has ? "has" : ""}" id="hFile">${esc(S.name || "لا يوجد ملف")}</span>
             <button class="btn btn-sm" data-act="undo" id="hUndo" title="Ctrl+Z" disabled>${ic("undo")}تراجع</button>
             <button class="btn btn-sm" data-act="open">${ic("folder")}فتح</button>
+            <button class="btn btn-sm" data-act="newfile">${ic("plus")}ملف جديد</button>
             <button class="btn btn-sm" data-act="detect">${ic("search")}كشف من FiveM</button>
+            <button class="btn btn-sm" data-act="saveas" ${has ? "" : "disabled"}>${ic("copy")}حفظ كنسخة</button>
             <button class="btn btn-sm btn-st" data-act="save" id="hSave" ${has ? "" : "disabled"}>${ic("check")}حفظ والتحقق</button>` : ""}
         </div>`;
     }
@@ -93,7 +96,8 @@
             <div class="icon-tile" style="width:68px;height:68px;border-radius:20px">${ic("palette")}</div>
             <h3 style="color:#fff;font-size:18px">افتح ملف timecycle_mods.xml</h3>
             <p style="color:var(--text-3);font-size:13px;max-width:460px;line-height:1.8">تعدّل كل معدّلات الجرافيكس (الألوان، الضباب، التوهّج، الفينييت…) بمعاينة حيّة ومقارنة قبل/بعد. يحفظ البرنامج نسخة من الأصل ويتحقق من الملف قبل الكتابة.</p>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn btn-st" data-act="open">${ic("folder")}فتح ملف XML</button><button class="btn" data-act="detect">${ic("search")}كشف من FiveM</button></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn btn-st" data-act="open">${ic("folder")}فتح ملف XML</button><button class="btn" data-act="detect">${ic("search")}كشف من FiveM</button><button class="btn" data-act="newfile">${ic("plus")}إنشاء ملف جديد</button></div>
+            <small style="color:var(--text-3);font-size:11.5px">ما عندك ملف؟ اضغط «إنشاء ملف جديد» ليولّده البرنامج بقوالب CA جاهزة ثم احفظه حيث تريد.</small>
         </div>`;
     }
     function listHtml() {
@@ -152,8 +156,9 @@
     function rightHtml(m) {
         const T = S.tune;
         return `<div class="card pv"><h4>${ic("eye")}معاينة تقريبية — قبل / بعد</h4>
-                <div class="pvbox"><canvas id="pv" width="480" height="270"></canvas><span class="tag l">قبل</span><span class="tag r">بعد</span></div>
-                <input type="range" id="split" min="0" max="100" value="${S.split}" aria-label="تقسيم المعاينة"><small>مشهد تجريبي يطبّق التصحيح اللوني والتشبع والتعريض والفينييت فقط. هي مؤشّر سريع وليست محاكاة دقيقة لما ستراه داخل اللعبة.</small></div>
+                <div class="pvbar"><select class="sel" id="pvSel">${pvOptions()}</select><button class="btn btn-sm" data-act="pvadd" title="أضف لقطة من داخل اللعبة بدون أي تعديل جرافيكس">${ic("upload")}لقطتي</button>${S.pvBase.startsWith("pv_") ? `<button class="btn btn-sm btn-danger" data-act="pvdel">${ic("trash")}</button>` : ""}</div>
+                <div class="pvbox"><canvas id="pv" width="960" height="540"></canvas><span class="tag l">قبل</span><span class="tag r">بعد</span></div>
+                <input type="range" id="split" min="0" max="100" value="${S.split}" aria-label="تقسيم المعاينة"><small>${S.pvBase.startsWith("pv_") ? "لقطتك الحقيقية" : "مشهد تجريبي"} — تُطبَّق عليها: تصحيح اللون، إزاحة الظلال، التشبع، التعريض، التوهّج، الفينييت. الضباب والغيوم والانعكاسات والظلال لا تُحاكى هنا، فاختبرها داخل اللعبة. وللمعاينة الأقرب أضف لقطة من اللعبة بدون أي تعديل.</small></div>
             <div class="card sect"><h4>${ic("sliders2")}ضبط سريع لألوان المعدّل</h4>
                 ${[["bri", "السطوع", 40, 180, "%"], ["sat", "التشبع", 0, 220, "%"], ["con", "التباين", 60, 160, "%"], ["temp", "الحرارة", -100, 100, ""]].map(([k, l, a, b, u]) => `<div class="tune"><span>${l}</span><input type="range" data-tune="${k}" min="${a}" max="${b}" value="${T[k]}"><b id="tv_${k}">${T[k]}${u}</b></div>`).join("")}
                 <div style="display:flex;gap:6px"><button class="btn btn-sm btn-st" data-act="applytune" ${m ? "" : "disabled"}>تطبيق</button><button class="btn btn-sm" data-act="zerotune">تصفير</button></div>
@@ -162,29 +167,60 @@
                 <div class="looks">${TC.LOOKS.map((l) => `<button class="look" data-act="look" data-id="${l.id}" ${m ? "" : "disabled"}><i style="background:linear-gradient(90deg,${l.sw[0]},${l.sw[1]})"></i>${esc(l.name)}<small>${esc(l.sub)}</small></button>`).join("")}</div></div>`;
     }
 
-    /* ---- معاينة ---- */
-    const PV = { w: 480, h: 270, base: null };
-    function buildBase() {
-        const c = document.createElement("canvas"); c.width = PV.w; c.height = PV.h; const g = c.getContext("2d");
-        let gr = g.createLinearGradient(0, 0, 0, 170); gr.addColorStop(0, "#2f64a8"); gr.addColorStop(.55, "#7fb0dc"); gr.addColorStop(1, "#f6cf98"); g.fillStyle = gr; g.fillRect(0, 0, 480, 270);
-        g.fillStyle = "#fff4cf"; g.beginPath(); g.arc(380, 78, 24, 0, 7); g.fill();
-        g.fillStyle = "rgba(255,255,255,.55)"; [[70, 50, 60], [160, 80, 44], [300, 40, 52]].forEach(([x, y, r]) => { g.beginPath(); g.ellipse(x, y, r, r / 3, 0, 0, 7); g.fill(); });
-        g.fillStyle = "#4d6a52"; g.beginPath(); g.moveTo(0, 170); for (let x = 0; x <= 480; x += 40) g.lineTo(x, 130 + Math.sin(x / 55) * 22); g.lineTo(480, 170); g.fill();
-        const bl = [[20, 90, 46, "#59616f"], [70, 120, 38, "#7c6f64"], [112, 80, 52, "#4a5160"], [170, 105, 40, "#8a8f9a"], [215, 70, 58, "#5a4d58"], [278, 115, 42, "#6c7482"], [324, 92, 50, "#4c5a68"], [380, 118, 36, "#836b5f"], [420, 86, 54, "#55607a"]];
-        bl.forEach(([x, h, w, col]) => { g.fillStyle = col; g.fillRect(x, 190 - h, w, h); g.fillStyle = "rgba(255,226,150,.8)"; for (let yy = 190 - h + 8; yy < 182; yy += 14) for (let xx = x + 6; xx < x + w - 6; xx += 12) if ((xx * 7 + yy * 3) % 5 > 1) g.fillRect(xx, yy, 5, 6); });
-        g.fillStyle = "#34373e"; g.fillRect(0, 190, 480, 80); g.fillStyle = "#cfd3da"; for (let x = 10; x < 480; x += 60) g.fillRect(x, 232, 32, 4);
+    /* ---- معاينة (لقطة حقيقية من اللعبة أو مشهد تجريبي) ---- */
+    const PV = { w: 960, h: 540, cache: new Map(), before: { key: "", img: null }, loading: new Set() };
+    function cloud(g, x, y, s, a) {
+        for (let i = 0; i < 7; i++) {
+            const cx = x + (i - 3) * 14 * s + Math.sin(i * 2.1) * 6 * s, cy = y + Math.cos(i * 1.7) * 5 * s, r = (16 + (i % 3) * 7) * s;
+            const gr = g.createRadialGradient(cx, cy, 0, cx, cy, r); gr.addColorStop(0, `rgba(255,255,255,${a})`); gr.addColorStop(1, "rgba(255,255,255,0)");
+            g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
+        }
+    }
+    function drawScene(kind) {
+        const c = document.createElement("canvas"); c.width = PV.w; c.height = PV.h; const g = c.getContext("2d"); g.scale(2, 2);
+        const K = { day: { sky: ["#2f64a8", "#7fb0dc", "#f6cf98"], sun: [380, 78, 24, "#fff4cf"], hill: "#4d6a52", bl: ["#59616f", "#7c6f64", "#4a5160", "#8a8f9a", "#5a4d58", "#6c7482", "#4c5a68", "#836b5f", "#55607a"], win: .55, road: "#34373e", cl: .6 },
+            sunset: { sky: ["#232b5c", "#b4527f", "#ffb36b"], sun: [330, 158, 38, "#ffd9a0"], hill: "#2f3b3f", bl: ["#3c3f55", "#4d4457", "#363a50", "#51495d", "#3a3552", "#4a4a62", "#33384e", "#54445a", "#3d4160"], win: .9, road: "#262833", cl: .5 },
+            night: { sky: ["#04060f", "#0f1838", "#27325a"], sun: [90, 56, 14, "#e8edff"], hill: "#0e1620", bl: ["#1a1e2b", "#232331", "#171b28", "#2a2a38", "#1c2030", "#242a3b", "#181d2c", "#2b2631", "#1c2236"], win: 1.4, road: "#14161c", cl: .12 } }[kind] || null;
+        const k = K || { sky: ["#2f64a8", "#7fb0dc", "#f6cf98"], sun: [380, 78, 24, "#fff4cf"], hill: "#4d6a52", bl: ["#59616f", "#7c6f64", "#4a5160", "#8a8f9a", "#5a4d58", "#6c7482", "#4c5a68", "#836b5f", "#55607a"], win: .55, road: "#34373e", cl: .6 };
+        let gr = g.createLinearGradient(0, 0, 0, 175); gr.addColorStop(0, k.sky[0]); gr.addColorStop(.55, k.sky[1]); gr.addColorStop(1, k.sky[2]); g.fillStyle = gr; g.fillRect(0, 0, 480, 270);
+        if (kind === "night") { g.fillStyle = "#fff"; for (let i = 0; i < 70; i++) { g.globalAlpha = .3 + (i * 37 % 10) / 14; g.fillRect((i * 97) % 480, (i * 53) % 110, 1, 1); } g.globalAlpha = 1; }
+        const sg = g.createRadialGradient(k.sun[0], k.sun[1], 2, k.sun[0], k.sun[1], k.sun[2] * 3.2); sg.addColorStop(0, k.sun[3]); sg.addColorStop(.3, k.sun[3] + "aa"); sg.addColorStop(1, "rgba(255,200,140,0)"); g.fillStyle = sg; g.beginPath(); g.arc(k.sun[0], k.sun[1], k.sun[2] * 3.2, 0, 7); g.fill();
+        g.fillStyle = k.sun[3]; g.beginPath(); g.arc(k.sun[0], k.sun[1], k.sun[2] * .55, 0, 7); g.fill();
+        [[70, 48, 1.1], [190, 84, .8], [300, 38, 1.2], [420, 70, .9], [20, 92, .7]].forEach(([x, y, s]) => cloud(g, x, y, s, k.cl));
+        g.fillStyle = k.hill; g.beginPath(); g.moveTo(0, 175); for (let x = 0; x <= 480; x += 40) g.lineTo(x, 132 + Math.sin(x / 55) * 22); g.lineTo(480, 175); g.fill();
+        const bl = [[20, 90, 46], [70, 120, 38], [112, 80, 52], [170, 105, 40], [215, 70, 58], [278, 115, 42], [324, 92, 50], [380, 118, 36], [420, 86, 54]];
+        bl.forEach(([x, h, w], i) => { g.fillStyle = k.bl[i]; g.fillRect(x, 190 - h, w, h); g.fillStyle = `rgba(255,226,150,${Math.min(1, k.win)})`; for (let yy = 190 - h + 8; yy < 182; yy += 14) for (let xx = x + 6; xx < x + w - 6; xx += 12) if ((xx * 7 + yy * 3) % 5 > 1) g.fillRect(xx, yy, 5, 6); });
+        g.fillStyle = k.road; g.fillRect(0, 190, 480, 80); g.fillStyle = "#cfd3da"; for (let x = 10; x < 480; x += 60) g.fillRect(x, 232, 32, 4);
+        if (kind !== "day") { [60, 190, 330, 450].forEach((x) => { const lg = g.createRadialGradient(x, 176, 1, x, 176, 40); lg.addColorStop(0, "rgba(255,214,150,.75)"); lg.addColorStop(1, "rgba(255,214,150,0)"); g.fillStyle = lg; g.fillRect(x - 40, 136, 80, 80); }); }
         g.fillStyle = "#b8232f"; g.beginPath(); g.roundRect(150, 200, 150, 42, 14); g.fill(); g.fillStyle = "#7d1520"; g.beginPath(); g.roundRect(186, 180, 80, 30, 10); g.fill(); g.fillStyle = "#9ed7ff"; g.fillRect(196, 186, 28, 18); g.fillRect(228, 186, 28, 18);
-        g.fillStyle = "#111"; [[180, 244], [270, 244]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 13, 0, 7); g.fill(); });
-        g.fillStyle = "#e9c46a"; g.fillRect(150, 214, 10, 8);
-        PV.base = g.getImageData(0, 0, PV.w, PV.h);
+        g.fillStyle = "#111"; [[180, 244], [270, 244]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 13, 0, 7); g.fill(); }); g.fillStyle = "#ffe9a6"; g.fillRect(150, 214, 10, 8);
+        return g.getImageData(0, 0, PV.w, PV.h);
+    }
+    function imgData(img) {
+        const c = document.createElement("canvas"); c.width = PV.w; c.height = PV.h; const g = c.getContext("2d");
+        const r = Math.max(PV.w / img.width, PV.h / img.height), w = img.width * r, h = img.height * r;
+        g.drawImage(img, (PV.w - w) / 2, (PV.h - h) / 2, w, h); return g.getImageData(0, 0, PV.w, PV.h);
+    }
+    function loadPvImage(name) {
+        if (PV.loading.has(name)) return; PV.loading.add(name);
+        api.pv.get(name).then((r) => {
+            if (!r || !r.success) { PV.loading.delete(name); return; }
+            const im = new Image(); im.onload = () => { PV.cache.set(name, imgData(im)); PV.loading.delete(name); drawPreview(); }; im.onerror = () => PV.loading.delete(name); im.src = r.dataUrl;
+        }).catch(() => PV.loading.delete(name));
+    }
+    function pvBase() {
+        const k = S.pvBase;
+        if (PV.cache.has(k)) return PV.cache.get(k);
+        if (k.startsWith("pv_")) { loadPvImage(k); return null; }
+        const d = drawScene(k); PV.cache.set(k, d); return d;
     }
     function gparams(m, orig) {
         const get = (k, d) => { const t = m.tags.find((x) => x.tag === k); return t ? (orig ? t.oa : t.a) : d; };
         return { cor: [get("postfx_correct_col_r", 1), get("postfx_correct_col_g", 1), get("postfx_correct_col_b", 1)], sh: [get("postfx_shift_col_r", 0), get("postfx_shift_col_g", 0), get("postfx_shift_col_b", 0)], des: get("postfx_desaturation", 1), exp: get("postfx_exposure", 0), bl: get("postfx_intensity_bloom", 0), vi: get("postfx_vignetting_intensity", 0), vr: get("postfx_vignetting_radius", 10), vc: [get("postfx_vignetting_col_r", 0), get("postfx_vignetting_col_g", 0), get("postfx_vignetting_col_b", 0)] };
     }
-    function gradeInto(out, P) {
-        const s = PV.base.data, d = out.data, W = PV.w, H = PV.h, ex = Math.pow(2, Math.max(-4, Math.min(4, P.exp)) * 0.4);
-        const vi = Math.min(1, Math.max(0, P.vi)), vs = Math.min(1.4, Math.max(0.35, 14 / Math.max(P.vr, 2)));
+    function gradeInto(out, base, P) {
+        const s = base.data, d = out.data, W = PV.w, H = PV.h, ex = Math.pow(2, Math.max(-4, Math.min(4, P.exp)) * 0.4);
+        const vi = Math.min(1.5, Math.max(0, P.vi)), vs = Math.min(1.6, Math.max(0.35, 14 / Math.max(P.vr, 2)));
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
             const o = (y * W + x) * 4; let r = s[o] / 255, g = s[o + 1] / 255, b = s[o + 2] / 255;
             r *= ex * P.cor[0]; g *= ex * P.cor[1]; b *= ex * P.cor[2];
@@ -193,21 +229,24 @@
             l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
             r = l + (r - l) * P.des; g = l + (g - l) * P.des; b = l + (b - l) * P.des;
             const hl = Math.max(0, l - 0.62) * P.bl * 0.35; r += hl; g += hl; b += hl;
-            if (vi > 0) { const dx = (x / W - 0.5) * 2, dy = (y / H - 0.5) * 2, dd = Math.sqrt(dx * dx + dy * dy) / 1.414; const f = Math.pow(Math.max(0, Math.min(1, (dd - 0.35 / vs) / 0.75)), 1.6) * vi * 0.85; r = r * (1 - f) + P.vc[0] * f; g = g * (1 - f) + P.vc[1] * f; b = b * (1 - f) + P.vc[2] * f; }
+            if (vi > 0) { const dx = (x / W - 0.5) * 2, dy = (y / H - 0.5) * 2, dd = Math.sqrt(dx * dx + dy * dy) / 1.414; const f = Math.min(0.9, Math.pow(Math.max(0, Math.min(1, (dd - 0.35 / vs) / 0.75)), 1.6) * vi * 0.55); r = r * (1 - f) + P.vc[0] * f; g = g * (1 - f) + P.vc[1] * f; b = b * (1 - f) + P.vc[2] * f; }
             d[o] = Math.max(0, Math.min(255, r * 255)); d[o + 1] = Math.max(0, Math.min(255, g * 255)); d[o + 2] = Math.max(0, Math.min(255, b * 255)); d[o + 3] = 255;
         }
     }
     const drawPreview = rafOnce(() => {
         const cv = $q("#pv"); if (!cv) return;
-        if (!PV.base) buildBase();
-        const ctx = cv.getContext("2d"), m = curMod();
-        const A = new ImageData(PV.w, PV.h), B = new ImageData(PV.w, PV.h);
-        const none = { cor: [1, 1, 1], sh: [0, 0, 0], des: 1, exp: 0, bl: 0, vi: 0, vr: 10, vc: [0, 0, 0] };
-        gradeInto(B, m ? gparams(m, true) : none); gradeInto(A, m ? gparams(m, false) : none);
+        const base = pvBase(), ctx = cv.getContext("2d"); if (!base) { ctx.fillStyle = "#111"; ctx.fillRect(0, 0, PV.w, PV.h); return; }
+        const m = curMod(), none = { cor: [1, 1, 1], sh: [0, 0, 0], des: 1, exp: 0, bl: 0, vi: 0, vr: 10, vc: [0, 0, 0] };
+        const A = new ImageData(PV.w, PV.h); gradeInto(A, base, m ? gparams(m, false) : none);
+        const key = S.sel + "|" + S.pvBase + "|" + S.baseVer;
+        if (PV.before.key !== key) { const B = new ImageData(PV.w, PV.h); gradeInto(B, base, m ? gparams(m, true) : none); PV.before = { key, img: B }; }
         const sx = Math.round(PV.w * S.split / 100);
-        for (let y = 0; y < PV.h; y++) { const o = y * PV.w * 4; for (let x = 0; x < sx * 4; x++) A.data[o + x] = B.data[o + x]; }
-        ctx.putImageData(A, 0, 0); ctx.fillStyle = "#fff"; ctx.fillRect(sx - 1, 0, 2, PV.h);
+        ctx.putImageData(A, 0, 0); if (sx > 0) ctx.putImageData(PV.before.img, 0, 0, 0, 0, sx, PV.h); ctx.fillStyle = "#fff"; ctx.fillRect(sx - 1, 0, 2, PV.h);
     });
+    function pvOptions() {
+        return `<optgroup label="مشاهد تجريبية"><option value="day" ${S.pvBase === "day" ? "selected" : ""}>نهار</option><option value="sunset" ${S.pvBase === "sunset" ? "selected" : ""}>غروب</option><option value="night" ${S.pvBase === "night" ? "selected" : ""}>ليل</option></optgroup>`
+            + (S.pvImgs.length ? `<optgroup label="لقطاتك من اللعبة">${S.pvImgs.map((i) => `<option value="${esc(i.name)}" ${S.pvBase === i.name ? "selected" : ""}>${esc(i.label)}</option>`).join("")}</optgroup>` : "");
+    }
 
     /* ---- أحداث Timecycle ---- */
     function markChg(rowEl, on) { rowEl.classList.toggle("chg", on); }
@@ -270,7 +309,7 @@
         const left = `<div class="card sect"><h4>${ic("folder")}مجلد effects</h4>
                 ${inf && inf.success ? `<div class="pathbox">${esc(inf.dir)}</div><div style="margin:8px 0;font-size:12px;color:${inf.exists ? "var(--ok)" : "var(--warn)"}">${inf.exists ? "المجلد موجود" : "المجلد غير موجود — سننشئه عند التثبيت"}</div>`
                     : `<div style="font-size:12.5px;color:var(--text-3);line-height:1.8;margin-bottom:8px">${esc(inf ? inf.message : "اضغط «كشف» ليجد البرنامج مجلد FiveM تلقائياً.")}</div>`}
-                <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm" data-act="fxdetect">${ic("search")}كشف</button><button class="btn btn-sm btn-st" data-act="fximport">${ic("upload")}استيراد ملف .dat</button></div></div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm" data-act="fxdetect">${ic("search")}كشف</button>${inf && inf.success && !inf.exists ? `<button class="btn btn-sm" data-act="fxensure">${ic("plus")}إنشاء المجلد</button>` : ""}<button class="btn btn-sm btn-st" data-act="fximport">${ic("upload")}استيراد ملف .dat</button></div></div>
             ${inf && inf.success ? `<div class="card sect fxlist"><h4>ملفات .dat الحالية</h4>${inf.files.length ? inf.files.map((f) => `<button class="it ${F.name === f.name && F.installed ? "on" : ""}" data-act="fxopen" data-n="${esc(f.name)}">${ic("file")}${esc(f.name)}<small>${Math.round(f.size / 1024 * 10) / 10}KB</small></button>`).join("") : '<div class="empty-line">لا توجد ملفات بعد</div>'}</div>` : ""}`;
         let right;
         if (!M) right = `<div class="card pane" style="padding:34px;text-align:center;align-items:center"><div class="icon-tile" style="width:68px;height:68px;border-radius:20px">${ic("drop")}</div><h3 style="color:#fff;font-size:18px">BloodFX</h3>
@@ -319,23 +358,34 @@
     /* ============================ الإجراءات ============================ */
     function loadXml(text, name) {
         const p = TC.parse(text); if (p.error) { toast("ملف غير مدعوم: " + p.error, "error", 5000); return false; }
-        S.text = S.base = text; S.name = name; S.model = p; S.hist = []; S.struct = 0; rebase();
+        S.text = S.base = text; S.name = name; S.model = p; S.hist = []; S.struct = 0; S.isNew = false; rebase();
         S.sel = Math.max(0, p.mods.findIndex((m) => m.tags.length)); S.q = ""; S.filter = "all"; S.mod = S.mod === "fx" ? "tc" : S.mod;
         renderAll(); toast(`فُتح ${name} — ${p.mods.length} معدّل`); return true;
     }
     async function doOpen() { const r = await api.open(); if (r.canceled) return; if (!r.success) return toast(r.message || "تعذّر فتح الملف", "error"); loadXml(r.text, r.name); }
     async function doDetect() {
         const r = await api.detect(); if (!r.success) return toast(r.message, "error", 5000);
-        if (!r.files.length) return toast("لم نجد ملفات timecycle داخل مجلد FiveM — استخدم «فتح»", "error", 5000);
+        if (!r.files.length) { if (await askConfirm({ title: "لم نجد ملف Timecycle", message: "لا يوجد ملف timecycle داخل مجلد FiveM. هل تريد أن ينشئ البرنامج ملفاً جديداً جاهزاً بقوالب CA؟", confirmText: "إنشاء ملف جديد" })) newFile(); return; }
         const d = dialog({ title: "ملفات Timecycle داخل FiveM", body: `<div style="display:flex;flex-direction:column;gap:6px">${r.files.map((f) => `<button class="btn" style="justify-content:flex-start;direction:ltr" data-tok="${esc(f.token)}">${ic("file")}${esc(f.rel)}</button>`).join("")}</div>` });
         d.body.addEventListener("click", async (e) => { const b = e.target.closest("[data-tok]"); if (!b) return; const o = await api.openToken(b.dataset.tok); d.close(); if (!o.success) return toast(o.message, "error"); loadXml(o.text, o.name); });
     }
-    async function doSave() {
+    function finishSave(out, r, msg) {
+        S.text = S.base = out; S.model = TC.parse(out); S.struct = 0; S.hist = []; S.isNew = false; if (r && r.name) S.name = r.name;
+        rebase(); S.sel = Math.min(S.sel, S.model.mods.length - 1); renderAll(); toast(msg);
+    }
+    function newFile() {
+        if (!loadXml(TC.template(), "timecycle_mods_new.xml")) return;
+        S.base = ""; S.isNew = true; rebase(); S.sel = 0; renderAll(); toast("أُنشئ ملف جديد — عدّل ثم اضغط «حفظ» لاختيار مكانه");
+    }
+    async function doSave(asCopy) {
         if (!S.model) return;
         const out = TC.apply(S.text, S.model), v = TC.verify(out, S.model);
         if (!v.ok) return toast("لم يُحفظ الملف: " + v.why, "error", 6000);
-        const r = await api.save(out); if (!r.success) return toast(r.message || "فشل الحفظ", "error", 5000);
-        S.text = S.base = out; S.model = TC.parse(out); S.struct = 0; S.hist = []; rebase(); S.sel = Math.min(S.sel, S.model.mods.length - 1); renderAll(); toast("حُفظ الملف بعد التحقق ✓ — النسخة الأصلية محفوظة بجانبه");
+        const useAs = asCopy || S.isNew;
+        const r = useAs ? await api.saveAs(out, true) : await api.save(out);
+        if (r.canceled) return;
+        if (!r.success) return toast(r.message || "فشل الحفظ", "error", 5000);
+        finishSave(out, r, useAs ? "حُفظ الملف بعد التحقق ✓" : "حُفظ الملف بعد التحقق ✓ — النسخة الأصلية محفوظة بجانبه");
     }
     async function askName(title, def) {
         return new Promise((res) => {
@@ -357,6 +407,7 @@
     root.addEventListener("change", (e) => {
         const el = e.target;
         if (S.mod === "tc" && (el.dataset.f === "pick" || el.dataset.f === "hex")) return;
+        if (el.id === "pvSel") { S.pvBase = el.value; renderAll(); return; }
         if (el.dataset && el.dataset.fxsel != null) { const i = +el.dataset.fxsel; if (el.checked) S.fx.sel.add(i); else S.fx.sel.delete(i); return; }
         if (el.id === "fxAll") { S.fx.sel = el.checked ? new Set(S.fx.model.lines.filter((l) => l.kind === "d").map((l) => l.i)) : new Set(); renderAll(); return; }
         if (el.id === "fxInts") { S.fx.ints = el.checked; return; }
@@ -374,6 +425,11 @@
                 case "open": await doOpen(); break;
                 case "detect": await doDetect(); break;
                 case "save": await doSave(); break;
+                case "saveas": await doSave(true); break;
+                case "newfile": if (dirty() && !await askConfirm({ title: "ملف جديد", message: "توجد تعديلات غير محفوظة ستضيع. متابعة؟", confirmText: "متابعة" })) break; newFile(); break;
+                case "pvadd": { const r = await api.pv.add(); if (r.canceled) break; if (!r.success) return toast(r.message || "فشل", "error"); const l = await api.pv.list(); S.pvImgs = l.items || []; S.pvBase = r.name; renderAll(); toast("أُضيفت اللقطة ✓"); break; }
+                case "pvdel": { if (!S.pvBase.startsWith("pv_")) break; if (!await askConfirm({ title: "حذف اللقطة", message: "ستُحذف من البرنامج فقط.", confirmText: "حذف", danger: true })) break; await api.pv.remove(S.pvBase); PV.cache.delete(S.pvBase); const l = await api.pv.list(); S.pvImgs = l.items || []; S.pvBase = "day"; renderAll(); break; }
+                case "fxensure": { const r = await api.fx.ensure(); if (!r.success) return toast(r.message, "error"); toast("أُنشئ مجلد effects ✓"); await fxDetect(true); break; }
                 case "undo": undo(); break;
                 case "sel": S.sel = +b.dataset.i; renderAll(); break;
                 case "flt": S.filter = b.dataset.k; renderAll(); break;
@@ -431,6 +487,14 @@
     });
     window.addEventListener("beforeunload", (e) => { if (dirty()) { e.preventDefault(); e.returnValue = ""; } });
 
-    window.CA.ready.then(renderAll);
+    function lockedView() {
+        root.innerHTML = `<div class="card pane" style="padding:44px;text-align:center;align-items:center;margin-top:40px">
+            <div class="icon-tile" style="width:72px;height:72px;border-radius:22px">${ic("lock")}</div>
+            <h3 style="color:#fff;font-size:19px">CA Studio مغلق</h3>
+            <p style="color:var(--text-3);font-size:13px;max-width:440px;line-height:1.9">هذه الأداة متاحة فقط لأصحاب الرول الخاص في سيرفر Ca Store. إن كنت تملكه وما زالت ترى هذه الرسالة، اضغط «إعادة التحقق».</p>
+            <button class="btn btn-st" id="recheck">${ic("refresh")}إعادة التحقق</button></div>`;
+        $q("#recheck").onclick = async () => { const r = await api.access(); if (r && r.allowed) renderAll(); else toast("لا يزال الحساب بلا صلاحية", "error"); };
+    }
+    window.CA.ready.then(async () => { let r = null; try { r = await api.access(); } catch {} if (r && r.allowed) { try { const l = await api.pv.list(); S.pvImgs = (l && l.items) || []; } catch {} renderAll(); } else lockedView(); });
     window.__studio = { S, loadXml, renderAll };
 })();

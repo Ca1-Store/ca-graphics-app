@@ -294,6 +294,12 @@
         aside.querySelector("#palBtn").addEventListener("click", openPalette);
         const nm = (SESSION && SESSION.username) || "";
         if (nm) aside.querySelector("#userAvatar").textContent = nm.trim().charAt(0).toUpperCase();
+        /* استوديو CA: مخفي إلى أن يتأكد الخادم أن الحساب يملك الرول */
+        const sBtn = aside.querySelector('.nav-item[data-file="studio.html"]');
+        if (sBtn) {
+            sBtn.classList.add("hidden");
+            try { window.api.studio.access().then((r) => { if (r && r.allowed) { sBtn.classList.remove("hidden"); window.__studioOk = true; } }).catch(() => {}); } catch {}
+        }
         return aside;
     }
 
@@ -362,7 +368,7 @@
     let palEl = null;
     async function openPalette() {
         if (palEl) return;
-        const items = NAV.filter((n) => n.page && (!n.admin || (SESSION && (SESSION.isAdmin || SESSION.isOwner)))).map((n) => ({ label: n.label, hint: "صفحة", icon: n.icon, run: () => go(n.file) }));
+        const items = NAV.filter((n) => n.page && (n.page !== "studio" || window.__studioOk) && (!n.admin || (SESSION && (SESSION.isAdmin || SESSION.isOwner)))).map((n) => ({ label: n.label, hint: "صفحة", icon: n.icon, run: () => go(n.file) }));
         items.push({ label: "التحقق من التحديثات", hint: "أمر", icon: "refresh", run: checkUpdate });
         items.push({ label: "تبديل الكثافة (مريح / مضغوط)", hint: "أمر", icon: "list", run: () => { prefs.set("density", prefs.get("density", "cozy") === "compact" ? "cozy" : "compact"); applyDensity(); } });
         items.push({ label: "تسجيل الخروج", hint: "أمر", icon: "logout", run: logout });

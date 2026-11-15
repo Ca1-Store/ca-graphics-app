@@ -127,3 +127,5 @@
 .mh > div:first-child { flex: 1; min-width: 0; }
 .mh h2 { overflow-wrap: anywhere; }
 .sw input { opacity: 0; }
+.pvbar { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+.pvbar .sel { flex: 1; min-width: 0; height: 32px; direction: rtl; }

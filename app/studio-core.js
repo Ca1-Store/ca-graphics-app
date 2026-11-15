@@ -175,9 +175,9 @@
         ["lens", "العدسة والعمق والضبابية", /^(postfx_(vignetting|motionblur)|blur_vignetting|screen_blur|bokeh|dof|lens|chrom|Lensflare|environmental_blur)/i],
         ["noise", "الضوضاء والخطوط", /^postfx_(noise|scanline)/],
         ["fog", "الضباب", /^(fog|fogray)/],
-        ["light", "الإضاءة", /^(light_|ped_light|sun_|moon_|natural_|artificial_|particle_light|lodlight|reflection_)/],
+        ["sky", "السماء والشمس والقمر", /^(sky_|sun_|moon_|sprite_|cloud|Lensflare)/i],
+        ["light", "الإضاءة", /^(light_|ped_light|natural_|artificial_|particle_light|lodlight|reflection_)/],
         ["shadow", "الظلال و SSAO", /^(dir_shadow|shadow_|ssao)/],
-        ["sky", "السماء", /^sky_/],
         ["water", "الماء والحرارة", /^(water_|hh_|temperature)/],
         ["nv", "الرؤية الليلية", /^nv_/],
         ["lod", "المسافات (LOD)", /^(lod|far_clip|entity_reject|portal)/],
@@ -242,5 +242,17 @@
         { id: "dof", name: "إيقاف العمق (DOF)", test: /^(dof_blur_far|dof_blur_mid)$/, to: 0 },
     ];
 
-    window.TC = { parse, apply, changedCount, addTag, removeTag, cloneModifier, deleteModifier, newModifier, importMods, verify, items, groupLabel, GROUP_ORDER, groupOf, colorOf, setColor, adjustColor, toHex, fromHex, fmt, clamp, KNOWN_TAGS, LOOKS, GLOBAL_TOOLS, setNumMods };
+    /* ملف جديد بنفس تنسيق ملفات TB/VisualV: يبدأ بقوالب جاهزة تعدّلها كما تشاء */
+    function template() {
+        const E = "\r\n", out = ['<?xml version="1.0" encoding="UTF-8"?>', "<!-- Created with CA Studio -->", '<timecycle_modifier_data version="1">'];
+        for (const l of LOOKS) {
+            const tags = Object.entries(l.set);
+            out.push(`\t<modifier name="CA_${l.id}" numMods="${tags.length}" userFlags="0">`);
+            for (const [k, v] of tags) out.push(`\t\t<${k}>${fmt(v)} ${fmt(0)}</${k}>`);
+            out.push("\t</modifier>");
+        }
+        out.push("</timecycle_modifier_data>", "");
+        return out.join(E);
+    }
+    window.TC = { template, parse, apply, changedCount, addTag, removeTag, cloneModifier, deleteModifier, newModifier, importMods, verify, items, groupLabel, GROUP_ORDER, groupOf, colorOf, setColor, adjustColor, toHex, fromHex, fmt, clamp, KNOWN_TAGS, LOOKS, GLOBAL_TOOLS, setNumMods };
 })();
