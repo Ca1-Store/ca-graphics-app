@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; media-src 'self' http: https:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ca Store - الرئيسية</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="pages.css">
+    <link rel="stylesheet" href="ui.css">
+</head>
+<body data-page="index">
+    <div class="bg"></div>
+
+    <main class="content">
+        <div class="content-inner">
+            <section class="feat" id="heroFeat">
+                <div>
+                    <span class="badge hi" id="heroTag">أهلاً بك</span>
+                    <h3 id="heroTitle">أهلاً بعودتك</h3>
+                    <p id="heroDesc">ثبّت باكات الجرافيكس والمودات، وحسّن أداء FiveM، وتابع كل جديد من مكان واحد.</p>
+                </div>
+                <button class="btn btn-primary" id="heroBtn" data-open="addons.html" data-ic="package">تصفّح المكتبة</button>
+            </section>
+
+            <section class="stats4" style="margin-top:16px">
+                <div class="kpi"><div class="k">مودات متاحة لك</div><div class="v" id="kMods">—</div><div class="s" id="kModsS"></div></div>
+                <div class="kpi"><div class="k">مثبّتة على جهازك</div><div class="v" id="kInst">—</div><div class="s" id="kInstS"></div></div>
+                <div class="kpi"><div class="k">اشتراكك</div><div class="v" id="kPlan" style="font-size:24px">—</div><div class="s" id="kPlanS"></div></div>
+                <div class="kpi"><div class="k">حالة FiveM</div><div class="v" id="kFivem" style="font-size:24px">—</div><div class="s" id="kFivemS"></div></div>
+            </section>
+
+            <div class="cols2">
+                <section class="panel">
+                    <h3 data-ic="sparkle">جديد المكتبة <span class="more" data-open="addons.html" style="cursor:pointer">عرض الكل</span></h3>
+                    <div class="mgrid" id="newGrid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"><div class="skel" style="height:150px"></div><div class="skel" style="height:150px"></div><div class="skel" style="height:150px"></div></div>
+                </section>
+                <section class="panel">
+                    <h3 data-ic="megaphone">آخر الأخبار <span class="more" data-open="news.html" style="cursor:pointer">كل الأخبار</span></h3>
+                    <div class="feed" id="newsFeed"><div class="skel" style="height:60px"></div></div>
+                </section>
+            </div>
+
+            <section class="panel" style="margin-top:14px">
+                <h3 data-ic="zap">وصول سريع</h3>
+                <div class="quick-grid">
+                    <button class="quick" data-open="versions.html"><span class="icon-tile" data-ic="grid"></span><span class="quick-title">باكات الجرافيكس</span><span class="quick-desc">ثبّت أحدث إصدارات CA الرسمية</span></button>
+                    <button class="quick" data-open="customize.html"><span class="icon-tile" data-ic="sliders"></span><span class="quick-title">التخصيص والفلاتر</span><span class="quick-desc">فلاتر ReShade وتخصيصات اللعبة</span></button>
+                    <button class="quick" data-open="profiles.html"><span class="icon-tile" data-ic="layers"></span><span class="quick-title">ملفات التعريف</span><span class="quick-desc">احفظ مجموعتك وطبّقها بضغطة</span></button>
+                    <button class="quick" data-open="diagnostics.html"><span class="icon-tile" data-ic="activity"></span><span class="quick-title">التشخيص</span><span class="quick-desc">افحص جاهزية جهازك والاتصال</span></button>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <div id="notify" class="notification"></div>
+    <script src="icons-extra.js"></script>
+    <script src="shell.js"></script>
+    <script src="home.js"></script>
+</body>
+</html>

@@ -4,7 +4,21 @@ const path = require("path");
 const MAX = 8 * 1024 * 1024;
 
 module.exports = function initStudio(ctx) {
-    const { ipcMain, dialog, getMain, readFivemPath, app } = ctx;
+    const { ipcMain: rawIpc, dialog, getMain, readFivemPath, app, request } = ctx;
+
+    /* ---- بوابة الرول: كل أوامر الاستوديو تمرّ من هنا (التحقق من الخادم، يُخزَّن 5 دقائق) ---- */
+    const LOCKED = { success: false, locked: true, code: "STUDIO_LOCKED", message: "CA Studio متاح فقط لأصحاب الرول الخاص" };
+    let acc = { at: 0, ok: false };
+    async function allowed(force) {
+        if (!force && Date.now() - acc.at < 5 * 60 * 1000) return acc.ok;
+        const r = await request("GET", "/api/v4/studio/access");
+        if (r && r.success) acc = { at: Date.now(), ok: r.allowed === true };
+        else if (!r || !r.offline) acc = { at: Date.now(), ok: false };      // رفض صريح = مغلق
+        else if (Date.now() - acc.at > 30 * 60 * 1000) acc = { at: Date.now(), ok: false };   // بلا اتصال لفترة طويلة = مغلق
+        return acc.ok;
+    }
+    const ipcMain = { handle: (name, fn) => rawIpc.handle(name, async (...a) => (await allowed()) ? fn(...a) : LOCKED) };
+    rawIpc.handle("studio:access", async () => ({ success: true, allowed: await allowed(true) }));
     let current = null;                 // { path } الملف المفتوح حالياً
     const tokens = new Map();           // token -> path (نتائج الكشف)
 
@@ -54,11 +68,11 @@ module.exports = function initStudio(ctx) {
             return { success: true, path: current.path, backup: bk };
         } catch (er) { return { success: false, message: er.code === "EACCES" || er.code === "EPERM" ? "ليس لدى البرنامج صلاحية الكتابة هنا" : (er.message || "فشل الحفظ") }; }
     });
-    ipcMain.handle("studio:saveAs", async (e, text) => {
+    ipcMain.handle("studio:saveAs", async (e, text, adopt) => {
         text = String(text || ""); if (text.length < 10 || text.length > MAX) return { success: false, message: "محتوى غير صالح" };
-        const r = await dialog.showSaveDialog(getMain(), { title: "حفظ نسخة XML", defaultPath: current ? path.basename(current.path) : "timecycle.xml", filters: [{ name: "XML", extensions: ["xml"] }] });
+        const r = await dialog.showSaveDialog(getMain(), { title: "حفظ نسخة XML", defaultPath: current ? path.basename(current.path) : "timecycle_mods_1.xml", filters: [{ name: "XML", extensions: ["xml"] }] });
         if (r.canceled || !r.filePath) return { success: false, canceled: true };
-        try { fs.writeFileSync(r.filePath, text, "utf8"); return { success: true, path: r.filePath }; } catch (er) { return { success: false, message: er.message }; }
+        try { fs.writeFileSync(r.filePath, text, "utf8"); if (adopt) current = { path: r.filePath }; return { success: true, path: r.filePath, name: path.basename(r.filePath) }; } catch (er) { return { success: false, message: er.message }; }
     });
     ipcMain.handle("studio:restore", () => {
         if (!current) return { success: false, message: "لا يوجد ملف مفتوح" };
@@ -152,5 +166,34 @@ module.exports = function initStudio(ctx) {
             return { success: false, message: "لا توجد نسخة احتياطية لهذا الملف" };
         } catch (er) { return { success: false, message: er.message || "فشل الاسترجاع" }; }
     });
+    ipcMain.handle("studio:fx:ensure", () => {
+        const info = effectsInfo(); if (!info) return { success: false, message: "تعذّر تحديد مجلد FiveM" };
+        try { fs.mkdirSync(info.dir, { recursive: true }); return { success: true, dir: info.dir }; } catch (er) { return { success: false, message: er.code === "EACCES" || er.code === "EPERM" ? "ليس لدى البرنامج صلاحية الإنشاء هنا" : er.message }; }
+    });
     ipcMain.handle("studio:fx:reveal", () => { const i = effectsInfo(); return { success: !!i, dir: i ? i.dir : "" }; });
+
+    /* ============ لقطات المعاينة (صور من داخل اللعبة بدون أي تعديل) ============ */
+    const PV_DIR = () => path.join(app.getPath("userData"), "studio_preview");
+    const IMG = { png: [0x89, 0x50, 0x4e, 0x47], jpg: [0xff, 0xd8, 0xff], webp: [0x52, 0x49, 0x46, 0x46] };
+    const imgKind = (b) => Object.keys(IMG).find((k) => IMG[k].every((v, i) => b[i] === v));
+    const MIME = { png: "image/png", jpg: "image/jpeg", webp: "image/webp" };
+    const pvList = () => { try { return fs.readdirSync(PV_DIR()).filter((f) => /^pv_[\w-]+\.(png|jpg|webp)$/.test(f)).sort(); } catch { return []; } };
+    const pvRead = (f) => { const b = fs.readFileSync(path.join(PV_DIR(), f)); return "data:" + MIME[f.split(".").pop()] + ";base64," + b.toString("base64"); };
+    ipcMain.handle("studio:pv:list", () => ({ success: true, items: pvList().map((f) => ({ name: f, label: f.replace(/^pv_/, "").replace(/\.\w+$/, "") })) }));
+    ipcMain.handle("studio:pv:get", (e, name) => { name = path.basename(String(name || "")); if (!pvList().includes(name)) return { success: false }; try { return { success: true, dataUrl: pvRead(name) }; } catch { return { success: false }; } });
+    ipcMain.handle("studio:pv:add", async () => {
+        const r = await dialog.showOpenDialog(getMain(), { title: "اختر لقطة شاشة من اللعبة (بدون أي تعديل جرافيكس)", properties: ["openFile"], filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "webp"] }] });
+        if (r.canceled || !r.filePaths[0]) return { success: false, canceled: true };
+        try {
+            const st = fs.statSync(r.filePaths[0]); if (!st.isFile() || st.size > 15 * 1024 * 1024) return { success: false, message: "الصورة كبيرة جداً (الحد 15MB)" };
+            const buf = fs.readFileSync(r.filePaths[0]); const kind = imgKind(buf); if (!kind) return { success: false, message: "الملف ليس صورة PNG/JPG/WebP" };
+            if (pvList().length >= 12) return { success: false, message: "وصلت الحد (12 لقطة). احذف لقطة أولاً" };
+            fs.mkdirSync(PV_DIR(), { recursive: true });
+            const base = path.basename(r.filePaths[0]).replace(/\.\w+$/, "").replace(/[^\w\-]+/g, "_").slice(0, 30) || "img";
+            const file = "pv_" + base + "_" + Date.now().toString(36) + "." + kind;
+            fs.writeFileSync(path.join(PV_DIR(), file), buf);
+            return { success: true, name: file, dataUrl: pvRead(file) };
+        } catch (er) { return { success: false, message: er.message }; }
+    });
+    ipcMain.handle("studio:pv:remove", (e, name) => { name = path.basename(String(name || "")); if (!pvList().includes(name)) return { success: false }; try { fs.unlinkSync(path.join(PV_DIR(), name)); return { success: true }; } catch { return { success: false }; } });
 };

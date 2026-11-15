@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; media-src 'self' http: https:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ca Store</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="pages.css">
+    <link rel="stylesheet" href="ui.css">
+</head>
+<body class="splash" data-page="splash">
+    <div class="bg"></div>
+    <div class="sp-wrap">
+        <span class="tpill sp-upd hidden" id="spUpd" data-ic="refresh"><span id="spUpdTxt"></span></span>
+        <div class="sp-ring">
+            <svg viewBox="0 0 170 170"><circle class="tr" cx="85" cy="85" r="76"/><circle class="pg" id="spPg" cx="85" cy="85" r="76"/></svg>
+            <img src="../assets/logo.png" alt="">
+        </div>
+        <div class="sp-title">CA STORE</div>
+        <div class="sp-sub" id="spSub">جاري تجهيز بيئتك...</div>
+        <div class="sp-steps" id="spSteps"></div>
+        <div class="sp-bar"><i id="spBar"></i></div>
+        <div id="spState"></div>
+        <div class="sp-tip hidden" id="spTip" data-ic="sparkle"><span id="spTipTxt"></span></div>
+        <div class="sp-foot" id="spFoot">CA STORE</div>
+    </div>
+    <script src="icons-extra.js"></script>
+    <script src="shell.js"></script>
+    <script src="splash.js"></script>
+</body>
+</html>

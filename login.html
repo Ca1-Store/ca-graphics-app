@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; media-src 'self' http: https:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ca Store - تسجيل الدخول</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="pages.css">
+    <link rel="stylesheet" href="ui.css">
+</head>
+<body data-page="login">
+    <div class="bg"></div>
+
+    <main class="content login-wrap">
+        <section class="login-intro">
+            <div class="eyebrow">Ca Graphics Store</div>
+            <h1 class="login-title">جرافيكس <span>احترافي</span><br>لـ FiveM</h1>
+            <p class="login-desc">منصة متكاملة لإدارة وتثبيت جرافيكس FiveM. سجّل دخولك بحساب ديسكورد للوصول إلى نسختك.</p>
+            <ul class="login-feats">
+                <li><span class="icon-tile sm" data-ic="refresh"></span>تحديث فوري عند تغيّر رتبتك في الديسكورد</li>
+                <li><span class="icon-tile sm" data-ic="download"></span>تثبيت الجرافيكس والمودات بضغطة واحدة</li>
+                <li><span class="icon-tile sm" data-ic="lock"></span>حماية مرتبطة بالجهاز، فلا يمكن مشاركة الحساب</li>
+            </ul>
+        </section>
+
+        <section class="login-card">
+            <img class="login-logo" src="../assets/logo.png" alt="Ca Store">
+            <h2>مرحباً بك</h2>
+            <p class="login-sub">سجّل دخولك عبر ديسكورد للوصول إلى المحتوى المخصص لنسختك</p>
+            <button class="btn btn-primary btn-block login-btn" id="loginBtn" data-ic="discord">تسجيل الدخول عبر Discord</button>
+            <div class="login-status" id="loginStatus"></div>
+            <div class="login-foot" data-ic="lock">محمي بتشفير JWT وبصمة الجهاز</div>
+        </section>
+    </main>
+
+    <div id="notify" class="notification"></div>
+    <script src="icons-extra.js"></script>
+    <script src="shell.js"></script>
+    <script src="login.js"></script>
+</body>
+</html>

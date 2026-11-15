@@ -260,7 +260,7 @@ module.exports = function initV4(ctx) {
             return { success: false, message: "حدث خطأ أثناء التثبيت" };
         } finally { busy = false; dlState.running = false; }
     }
-    require("./studio")({ ipcMain, dialog, getMain, readFivemPath, app });
+    require("./studio")({ ipcMain, dialog, getMain, readFivemPath, app, request });
     const sounds = require("./sounds")({ app, ipcMain, dialog, getMain, request, report, doDownload, dlState, setStage, getBusy: () => busy, setBusy: (v) => { busy = v; }, findItem });
     ipcMain.handle("lib:install", (e, a) => installItem(a));
 

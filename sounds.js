@@ -1,233 +1,73 @@
-/* ساوندات الأسلحة: تحديد مسار GTA V تلقائياً، استبدال ملفات x64\audio\sfx مع نسخة احتياطية واسترجاع */
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const { execFile } = require("child_process");
-const gta = require("./lib/gta");
-const core = require("./lib/core");
-let unzipper; try { unzipper = require("unzipper"); } catch { unzipper = null; }
+/* ساوندات الأسلحة — تثبيت من المكتبة أو من جهاز العميل، واسترجاع الأصل */
+const { ic, esc, toast, safeImg, confirm: askConfirm } = window.CA;
+const $ = (id) => document.getElementById(id);
+let G = null, LIB = [], busy = null;
 
-module.exports = function initSounds(ctx) {
-    const { app, ipcMain, dialog, getMain, request, report, doDownload, dlState, setStage, getBusy, setBusy, findItem } = ctx;
-    const ud = app.getPath("userData");
-    const PATH_FILE = path.join(ud, "gta_path.txt"), REC_FILE = path.join(ud, "gta_sounds.json"), BK_DIR = path.join(ud, "gta_sound_backup");
-    const MAX_RPF = 1.5 * 1024 * 1024 * 1024;
+function gtaBox() {
+    if (!G || !G.success) {
+        $("gtaBox").innerHTML = `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div class="icon-tile">${ic("alert")}</div><div style="flex:1"><b style="color:#fff">لم نجد لعبة GTA V</b><div style="color:var(--text-3);font-size:12.5px">${esc((G && G.message) || "حدّد مجلد اللعبة (الذي يحتوي مجلد x64)")}</div></div><button class="btn" id="bDetect">${ic("refresh")} بحث تلقائي</button><button class="btn btn-primary" id="bPick">${ic("folder")} تحديد المجلد</button></div>`;
+    } else {
+        $("gtaBox").innerHTML = `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div class="icon-tile">${ic("check")}</div><div style="flex:1;min-width:0"><b style="color:#fff">تم العثور على GTA V</b> <span class="badge ${G.source === "manual" ? "" : "ok"}">${G.source === "manual" ? "يدوي" : "تلقائي"}</span><div class="ltr" style="color:var(--text-3);font-size:12px;word-break:break-all">${esc(G.sfx || G.path)}</div></div><button class="btn" id="bDetect">${ic("refresh")} إعادة البحث</button><button class="btn" id="bPick">${ic("folder")} تغيير</button></div>
+        <div style="margin-top:12px;font-size:12px;color:var(--text-3)">أغلق اللعبة وبرنامج FiveM قبل التثبيت. إن ظهر خطأ صلاحيات شغّل البرنامج «كمسؤول». يُحتفظ بنسخة من ملفك الأصلي لاسترجاعه في أي وقت.</div>`;
+    }
+}
+async function loadGta(force) {
+    let r = await window.api.gta.detect(force);
+    if (r && r.success) { const s = await window.api.gta.state(); G = Object.assign({}, r, s && s.success ? { files: s.files } : {}); } else G = r;
+    gtaBox();
+}
+function card(s) {
+    const img = safeImg(s.img), isBusy = busy === s.id;
+    let act;
+    if (!s.unlocked) act = `<div class="lock-note">${ic("lock", "sm")} ${esc(s.plans.length ? "يتطلب " + s.plans.join(" / ") : "غير متاح")}</div>`;
+    else if (isBusy) act = `<div class="dlp"><i id="bar"></i></div><div class="dlm"><span id="dtxt">جاري التحضير...</span></div>`;
+    else act = `<button class="btn btn-primary" data-act="install" ${busy ? "disabled" : ""}>${ic("download")} تركيب الساوند</button>`;
+    const done = G && G.files && G.files.find((f) => f.info && f.info.id === s.id);
+    return `<div class="mcard" data-id="${esc(s.id)}"><div class="cv">${img ? `<img src="${esc(img)}" alt="">` : `<div class="ph">${ic("waves")}</div>`}${done ? `<div class="tg"><span class="badge ok">مركّب</span></div>` : ""}</div><div class="cb"><h5>${esc(s.name)}</h5><div class="meta">${s.weapon ? `<span>${esc(s.weapon)}</span>` : ""}<span>${esc(s.sizeLabel || "")}</span><span class="ltr">${esc(s.file)}</span></div>${s.description ? `<p style="font-size:12px;color:var(--text-3);margin:6px 0">${esc(s.description)}</p>` : ""}<div class="ca">${act}</div></div></div>`;
+}
+function renderLib() {
+    $("grid").innerHTML = LIB.length ? LIB.map(card).join("") : `<div class="empty" style="grid-column:1/-1"><div class="icon-tile">${ic("waves")}</div><h3>لا توجد ساوندات بعد</h3><p>سيضيف المشرفون ساوندات قريباً. يمكنك تركيب ساوندك الخاص من تبويب «ساوندات جهازي».</p></div>`;
+}
+function renderMine() {
+    const files = (G && G.files) || [];
+    const changed = files.filter((f) => f.replaced);
+    $("pMine").innerHTML = `<div class="toolrow"><button class="btn btn-primary" id="bLocal" ${G && G.success ? "" : "disabled"}>${ic("upload")} تركيب ساوند من جهازي (.rpf أو zip / rar / 7z)</button><span style="flex:1"></span>${changed.length ? `<button class="btn btn-danger" id="bRestoreAll">${ic("undo")} استرجاع كل الأصليات (${changed.length})</button>` : ""}</div>
+    <p style="color:var(--text-3);font-size:12.5px;margin-bottom:12px">اختر ملف الساوند الذي تملكه. يجب أن يحمل اسم ملف موجود في المجلد، مثل <span class="ltr">WEAPONS_PLAYER.rpf</span>، وإلا ستختار أي ملف تريد استبداله.</p>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>ملف الصوت</th><th>الحجم</th><th>الحالة</th><th></th></tr></thead><tbody>${files.map((f) => `<tr data-n="${esc(f.name)}"><td class="nm ltr">${esc(f.name)}</td><td>${f.size ? (f.size / 1048576).toFixed(1) + " MB" : "—"}</td><td>${f.replaced ? `<span class="badge warn">مستبدَل</span> <span style="color:var(--text-3);font-size:11.5px">${esc((f.info && f.info.name) || "")}</span>` : '<span class="badge">أصلي</span>'}</td><td>${f.replaced && f.hasBackup ? `<button class="ibtn" data-act="restore" title="استرجاع الأصل">${ic("undo")}</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="4"><div class="empty"><p>حدّد مسار GTA V لعرض الملفات</p></div></td></tr>`}</tbody></table></div>`;
+}
+async function refresh() { const s = await window.api.gta.state(); if (G && s && s.success) G.files = s.files; renderLib(); renderMine(); }
 
-    const readPath = () => { try { const p = fs.readFileSync(PATH_FILE, "utf8").trim(); return gta.isGtaRoot(p) ? p : null; } catch { return null; } };
-    const savePath = (p) => { fs.writeFileSync(PATH_FILE, p, "utf8"); };
-    const readRec = () => { try { return JSON.parse(fs.readFileSync(REC_FILE, "utf8")) || {}; } catch { return {}; } };
-    const writeRec = (o) => { try { fs.writeFileSync(REC_FILE, JSON.stringify(o), "utf8"); } catch {} };
-
-    /* ───── الاكتشاف التلقائي ───── */
-    const reg = (key, name) => new Promise((res) => {
-        if (process.platform !== "win32") return res(null);
-        execFile("reg", ["query", key, "/v", name], { timeout: 4000, windowsHide: true }, (err, out) => {
-            if (err) return res(null);
-            const m = String(out).match(new RegExp(name + "\\s+REG_\\w+\\s+(.+)", "i")); res(m ? m[1].trim() : null);
-        });
-    });
-    async function detectAll() {
-        const extra = [];
-        const rk = ["HKLM\\SOFTWARE\\WOW6432Node\\Rockstar Games\\Grand Theft Auto V", "HKLM\\SOFTWARE\\Rockstar Games\\Grand Theft Auto V", "HKLM\\SOFTWARE\\WOW6432Node\\Rockstar Games\\GTAV", "HKLM\\SOFTWARE\\WOW6432Node\\Rockstar Games\\Grand Theft Auto V Legacy"];
-        for (const k of rk) { const v = await reg(k, "InstallFolder"); if (v) extra.push(v); }
-        const steam = await reg("HKCU\\Software\\Valve\\Steam", "SteamPath");
-        const libs = [];
-        if (steam) {
-            libs.push(steam.replace(/\//g, "\\"));
-            try { libs.push(...gta.parseSteamLibraries(fs.readFileSync(path.join(steam, "steamapps", "libraryfolders.vdf"), "utf8"))); } catch {}
-        }
-        for (const l of libs) for (const g of ["Grand Theft Auto V", "Grand Theft Auto V Legacy", "Grand Theft Auto V Enhanced"]) extra.push(path.join(l, "steamapps", "common", g));
-        try {
-            const md = path.join(process.env.PROGRAMDATA || "C:\\ProgramData", "Epic", "EpicGamesLauncher", "Data", "Manifests");
-            for (const f of fs.readdirSync(md)) { if (!/\.item$/i.test(f)) continue; try { const j = JSON.parse(fs.readFileSync(path.join(md, f), "utf8")); if (/GTAV|Grand Theft Auto V/i.test(j.DisplayName || j.AppName || "") && j.InstallLocation) extra.push(j.InstallLocation); } catch {} }
-        } catch {}
-        return gta.findGta({ env: process.env, extra });
+async function afterInstall(r, okMsg) {
+    if (r && r.needTarget) { await chooseTarget(r); return; }
+    if (r && r.canceled) return;
+    toast(r && r.success ? (r.message || okMsg) : ((r && r.message) || "فشل التثبيت"), r && r.success ? "success" : "error", 4500);
+    await refresh();
+}
+async function chooseTarget(r) {
+    const d = window.CA.dialog({ title: "اختر الملف المراد استبداله", body: `<p style="color:var(--text-2);font-size:13px">«${esc(r.fileName)}» لا يطابق اسم أي ملف في المجلد. اختر الملف الذي سيحلّ محلّه:</p><select class="sel ltr" id="tg">${r.candidates.map((c) => `<option>${esc(c)}</option>`).join("")}</select>`, footer: `<button class="btn" data-dlg="close">إلغاء</button><button class="btn btn-primary" id="tgGo">استبدال</button>` });
+    d.el.querySelector("#tgGo").addEventListener("click", async () => { const t = d.el.querySelector("#tg").value; d.close(); const x = await window.api.gta.installLocalAs(r.token, t); await afterInstall(x, "تم الاستبدال"); });
+}
+document.addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.id === "bDetect") { await loadGta(true); await refresh(); }
+    else if (b.id === "bPick") { const r = await window.api.gta.select(); if (r && r.success) { await loadGta(false); await refresh(); toast("تم حفظ المسار", "success"); } else if (r && r.message) toast(r.message, "error"); }
+    else if (b.id === "bLocal") { const r = await window.api.gta.installLocal(); await afterInstall(r, "تم التثبيت"); }
+    else if (b.id === "bRestoreAll") { if (await askConfirm({ title: "استرجاع كل الأصليات؟", message: "ستُعاد كل ملفات الصوت التي استبدلتها إلى حالتها الأصلية.", confirmText: "استرجاع" })) { const r = await window.api.gta.restore({ all: true }); toast(r.message, r.success ? "success" : "error"); await refresh(); } }
+    else if (b.dataset.act === "restore") { const n = b.closest("[data-n]").dataset.n; const r = await window.api.gta.restore({ name: n }); toast(r.message, r.success ? "success" : "error"); await refresh(); }
+    else if (b.dataset.act === "install") {
+        const id = b.closest("[data-id]").dataset.id; const s = LIB.find((x) => x.id === id); if (!s || busy) return;
+        if (!G || !G.success) { toast("حدّد مسار GTA V أولاً", "error"); return; }
+        busy = id; renderLib();
+        const r = await window.api.lib.install({ type: "sound", id }); busy = null; await afterInstall(r, "تم تركيب الساوند");
     }
-    async function detect(force) {
-        const saved = !force && readPath();
-        if (saved) return { success: true, path: saved, sfx: gta.sfxDir(saved), source: "saved", candidates: [saved] };
-        const found = await detectAll();
-        if (found.length) { savePath(found[0]); return { success: true, path: found[0], sfx: gta.sfxDir(found[0]), source: "auto", candidates: found }; }
-        return { success: false, code: "NOT_FOUND", message: "لم نجد GTA V تلقائياً، حدّد مجلد اللعبة يدوياً", candidates: [] };
-    }
-
-    /* ───── التثبيت ───── */
-    function needRoot() { const r = readPath(); return r ? { root: r, sfx: gta.sfxDir(r) } : null; }
-    function readHead(file) { const fd = fs.openSync(file, "r"); try { const b = Buffer.alloc(8); fs.readSync(fd, b, 0, 8, 0); return b; } finally { fs.closeSync(fd); } }
-    /* ينسخ ملفاً مصدرياً إلى sfx بعد النسخ الاحتياطي. يعيد {ok,message} */
-    function placeFile(sfx, targetName, srcFile, meta) {
-        let st; try { st = fs.statSync(srcFile); } catch { return { ok: false, message: "تعذّر قراءة الملف" }; }
-        if (!st.isFile() || st.size < 16 || st.size > MAX_RPF) return { ok: false, message: "حجم الملف غير مقبول" };
-        { const h = readHead(srcFile); if (!gta.isRpf7(h)) return { ok: false, message: `«${path.basename(srcFile)}» ليس RPF صالحاً (بداية الملف: ${h.slice(0, 4).toString("hex")}). تأكد أنه ملف .rpf حقيقي وليس مضغوطاً أو تالفاً` }; }
-        const dest = path.join(sfx, targetName), tmp = dest + ".canew";
-        try {
-            fs.mkdirSync(BK_DIR, { recursive: true });
-            const bk = path.join(BK_DIR, targetName);
-            if (!fs.existsSync(bk) && fs.existsSync(dest)) fs.copyFileSync(dest, bk);   // نحتفظ بالأصل الأول فقط
-            fs.copyFileSync(srcFile, tmp);
-            fs.renameSync(tmp, dest);
-        } catch (e) { try { fs.unlinkSync(tmp); } catch {} return { ok: false, message: gta.errMessage(e) }; }
-        const rec = readRec(); rec[targetName] = { name: (meta && meta.name) || targetName, id: (meta && meta.id) || "", source: (meta && meta.source) || "local", at: new Date().toISOString() }; writeRec(rec);
-        return { ok: true };
-    }
-    /* يستخرج ملفات .rpf من zip إلى مجلد مؤقت */
-    async function extractRpfs(zipPath, tmpDir) {
-        if (!unzipper) throw new Error("وحدة الأرشيف غير متوفرة");
-        const dir = await unzipper.Open.file(zipPath);
-        const out = []; let total = 0, n = 0;
-        for (const f of dir.files) {
-            if (f.type !== "File" || !/\.rpf$/i.test(f.path)) continue;
-            const base = path.basename(String(f.path).replace(/\\/g, "/"));          // نستخدم الاسم فقط — لا مسارات من الأرشيف
-            if (!gta.SOUND_FILE.test(base)) continue;
-            total += Number(f.uncompressedSize) || 0; if (total > 3 * 1024 * 1024 * 1024) throw new Error("الأرشيف كبير جداً");
-            const p = path.join(tmpDir, (++n) + "_" + base);
-            await new Promise((res, rej) => f.stream().pipe(fs.createWriteStream(p)).on("finish", res).on("error", rej));
-            out.push({ name: base, file: p });
-        }
-        out.listed = dir.files.filter((f) => f.type === "File").slice(0, 6).map((f) => path.basename(String(f.path)));
-        return out;
-    }
-    /* rar / 7z عبر أداة tar المدمجة في ويندوز 10+ (bsdtar) */
-    function extractViaTar(src, tmpDir) {
-        return new Promise((resolve, reject) => {
-            const sub = fs.mkdtempSync(path.join(tmpDir, "x-"));
-            require("child_process").execFile("tar", ["-xf", src, "-C", sub], { timeout: 5 * 60 * 1000, windowsHide: true }, (err) => {
-                if (err) return reject(new Error("تعذّر فك الضغط تلقائياً. فك الضغط بنفسك (WinRAR / 7-Zip) ثم اختر ملف .rpf مباشرة"));
-                const out = [], all = []; let n = 0;
-                const walk = (d, depth) => {
-                    if (depth > 8 || out.length > 60) return;
-                    let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
-                    for (const e of ents) {
-                        const p = path.join(d, e.name);
-                        if (e.isDirectory()) walk(p, depth + 1);
-                        else if (e.isFile()) { all.push(e.name); if (/\.rpf$/i.test(e.name) && gta.SOUND_FILE.test(e.name)) out.push({ name: e.name, file: p }); }
-                    }
-                };
-                walk(sub, 0); out.listed = all.slice(0, 6); n += out.length; resolve(out);
-            });
-        });
-    }
-    const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} };
-
-    async function installPaths(srcs, meta) {
-        const g = needRoot(); if (!g) return { success: false, code: "NO_GTA", message: "حدّد مسار GTA V أولاً" };
-        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "casnd-")); const items = [];
-        try {
-            const problems = []; const listed = [];
-            for (const s of srcs) {
-                let kind = "unknown", head = Buffer.alloc(0);
-                try { head = readHead(s); kind = gta.sniff(head); } catch { problems.push(path.basename(s) + ": تعذّرت قراءته"); continue; }
-                try {
-                    if (kind === "rpf") items.push({ name: path.basename(s), file: s });
-                    else if (kind === "zip") { let got; try { got = await extractRpfs(s, tmp); } catch (e) { got = await extractViaTar(s, tmp); } items.push(...got); if (!got.length) { listed.push(...(got.listed || [])); problems.push(path.basename(s) + ": الأرشيف لا يحتوي ملف .rpf" + (got.listed && got.listed.length ? " (بداخله: " + got.listed.join("، ") + ")" : "")); } }
-                    else if (kind === "rar" || kind === "7z") { const got = await extractViaTar(s, tmp); items.push(...got); if (!got.length) problems.push(path.basename(s) + ": الأرشيف لا يحتوي ملف .rpf" + (got.listed && got.listed.length ? " (بداخله: " + got.listed.join("، ") + ")" : "")); }
-                    else problems.push(`${path.basename(s)}: ليس RPF ولا أرشيفاً مدعوماً (بداية الملف: ${head.slice(0, 4).toString("hex")})`);
-                } catch (e) { problems.push(path.basename(s) + ": " + gta.errMessage(e)); }
-            }
-            void listed;
-            if (!items.length) return { success: false, message: problems.length ? problems.slice(0, 3).join(" — ") : "لم نجد ملفات صوت (.rpf) في اختيارك" };
-            const results = [], unmatched = [];
-            for (const it of items) {
-                const t = gta.matchTarget(g.sfx, it.name);
-                if (!t) { unmatched.push(it); continue; }
-                const r = placeFile(g.sfx, t, it.file, meta); results.push({ name: t, ok: r.ok, message: r.message });
-            }
-            if (unmatched.length && !results.length && items.length === 1) {
-                const token = Math.random().toString(36).slice(2); pending.set(token, { file: unmatched[0].file, tmp, name: unmatched[0].name, meta }); setTimeout(() => { const p = pending.get(token); if (p) { pending.delete(token); cleanup(p.tmp); } }, 10 * 60 * 1000).unref?.();
-                return { success: false, needTarget: true, token, fileName: unmatched[0].name, candidates: listSfx(g.sfx).map((x) => x.name), message: "اسم الملف لا يطابق أي ملف في sfx، اختر الملف الذي تريد استبداله" , keepTmp: true };
-            }
-            unmatched.forEach((u) => results.push({ name: u.name, ok: false, message: "لا يطابق أي ملف في مجلد sfx" }));
-            const ok = results.filter((r) => r.ok).length;
-            return { success: ok > 0, replaced: ok, results, message: ok ? `تم استبدال ${ok} ملف صوت` : (results[0] && results[0].message) || "فشل التثبيت" };
-        } catch (e) { return { success: false, message: gta.errMessage(e) }; }
-        finally { if (![...pending.values()].some((p) => p.tmp === tmp)) cleanup(tmp); }
-    }
-    const pending = new Map();
-
-    function listSfx(sfx) {
-        const rec = readRec();
-        try {
-            return fs.readdirSync(sfx).filter((f) => /\.rpf$/i.test(f)).map((f) => {
-                let size = 0; try { size = fs.statSync(path.join(sfx, f)).size; } catch {}
-                return { name: f, size, replaced: !!rec[f], info: rec[f] || null, hasBackup: fs.existsSync(path.join(BK_DIR, f)) };
-            }).sort((a, b) => a.name.localeCompare(b.name));
-        } catch { return []; }
-    }
-
-    /* ───── من المكتبة ───── */
-    async function installLibrary(a) {
-        if (getBusy() || dlState.running) return { success: false, message: "هناك عملية جارية، انتظر حتى تنتهي", code: "BUSY" };
-        if (!needRoot()) return { success: false, code: "NO_GTA", message: "حدّد مسار GTA V أولاً من صفحة الساوندات" };
-        setBusy(true);
-        let dlFile = null;
-        try {
-            const l = await request("POST", "/api/v4/link", { type: "sound", id: a.id });
-            if (!l || !l.success) return { success: false, message: (l && l.message) || "تعذّر الحصول على رابط التحميل", code: l && l.code };
-            if (!core.isHttpUrl(l.url)) return { success: false, message: "رابط غير صالح" };
-            const lib = findItem("sound", a.id), name = String(l.name || (lib && lib.name) || a.id).slice(0, 120);
-            const maxBytes = l.sizeBytes ? Math.max(l.sizeBytes * 1.2, l.sizeBytes + 50 * 1048576) : 3 * 1024 * 1024 * 1024;
-            dlState.name = name;
-            const dl = await doDownload({ url: l.url, product: ("sound_" + String(a.id).replace(/[^\w-]/g, "")).slice(0, 60), name, sha256: l.sha256 || null, maxBytes });
-            if (!dl.success) { dlState.running = false; return dl; }
-            dlFile = dl.zipPath;
-            setStage("copying", "جاري استبدال ملفات الصوت...");
-            const fn = String(l.fileName || (lib && lib.file) || "");
-            let src = dlFile, tmpRename = null;
-            if (/\.rpf$/i.test(fn)) { tmpRename = path.join(os.tmpdir(), "casnd-" + Math.random().toString(36).slice(2) + "-" + path.basename(fn)); fs.copyFileSync(dlFile, tmpRename); src = tmpRename; }
-            else if (!/\.zip$/i.test(fn)) return { success: false, message: "صيغة الساوند غير مدعومة" };
-            const zipLike = /\.zip$/i.test(fn);
-            // تثبيت من ملف مُسمّى: الـrpf يحمل اسم الهدف (fn) والـzip يُستخرج منه
-            let r;
-            if (zipLike) { const zp = path.join(os.tmpdir(), "casnd-" + Math.random().toString(36).slice(2) + ".zip"); fs.copyFileSync(dlFile, zp); try { r = await installPaths([zp], { id: a.id, name, source: "library" }); } finally { try { fs.unlinkSync(zp); } catch {} } }
-            else { const g = needRoot(); const t = gta.matchTarget(g.sfx, fn); if (!t) r = { success: false, message: "الملف غير موجود في مجلد sfx لديك" }; else { const p = placeFile(g.sfx, t, src, { id: a.id, name, source: "library" }); r = p.ok ? { success: true, replaced: 1, message: "تم استبدال ملف الصوت" } : { success: false, message: p.message }; } }
-            if (tmpRename) { try { fs.unlinkSync(tmpRename); } catch {} }
-            setStage(r.success ? "done" : "error", r.success ? "تم تثبيت الساوند" : r.message);
-            report("sound", a.id, "", !!r.success, r.success ? undefined : r.message);
-            return r;
-        } catch (e) { console.error("sound install", e); return { success: false, message: gta.errMessage(e) }; }
-        finally { if (dlFile) { try { fs.unlinkSync(dlFile); } catch {} } setBusy(false); dlState.running = false; }
-    }
-
-    /* ───── IPC ───── */
-    ipcMain.handle("gta:detect", (e, force) => detect(!!force));
-    ipcMain.handle("gta:select", async () => {
-        const r = await dialog.showOpenDialog(getMain(), { title: "اختر مجلد لعبة GTA V (الذي يحتوي x64)", properties: ["openDirectory"] });
-        if (r.canceled || !r.filePaths[0]) return { success: false, canceled: true };
-        const root = gta.normalizeRoot(r.filePaths[0]);
-        if (!root) return { success: false, message: "هذا ليس مجلد GTA V (لم نجد x64\\audio\\sfx بداخله)" };
-        savePath(root); return { success: true, path: root, sfx: gta.sfxDir(root), source: "manual" };
-    });
-    ipcMain.handle("gta:state", () => {
-        const g = needRoot(); if (!g) return { success: false, code: "NO_GTA", message: "لم يُحدَّد مسار GTA V" };
-        return { success: true, path: g.root, sfx: g.sfx, files: listSfx(g.sfx) };
-    });
-    ipcMain.handle("gta:installLocal", async () => {
-        if (getBusy()) return { success: false, message: "هناك عملية جارية", code: "BUSY" };
-        const r = await dialog.showOpenDialog(getMain(), { title: "اختر ملفات الساوند (.rpf أو أرشيف)", properties: ["openFile", "multiSelections"], filters: [{ name: "Sound (rpf / zip / rar / 7z)", extensions: ["rpf", "zip", "rar", "7z"] }, { name: "كل الملفات", extensions: ["*"] }] });
-        if (r.canceled || !r.filePaths.length) return { success: false, canceled: true };
-        setBusy(true); try { return await installPaths(r.filePaths.slice(0, 20), { source: "local" }); } finally { setBusy(false); }
-    });
-    ipcMain.handle("gta:installLocalAs", (e, a) => {
-        a = a || {}; const p = pending.get(String(a.token || "")); if (!p) return { success: false, message: "انتهت صلاحية الطلب، اختر الملف من جديد" };
-        pending.delete(p && String(a.token));
-        try {
-            const g = needRoot(); if (!g) return { success: false, message: "حدّد مسار GTA V أولاً" };
-            const t = gta.matchTarget(g.sfx, String(a.target || "")); if (!t) return { success: false, message: "الملف الهدف غير صالح" };
-            const r = placeFile(g.sfx, t, p.file, p.meta); return r.ok ? { success: true, replaced: 1, message: "تم استبدال " + t } : { success: false, message: r.message };
-        } finally { cleanup(p.tmp); }
-    });
-    ipcMain.handle("gta:restore", (e, a) => {
-        a = a || {}; const g = needRoot(); if (!g) return { success: false, message: "حدّد مسار GTA V أولاً" };
-        const rec = readRec(); const names = a.all ? Object.keys(rec) : [gta.matchTarget(g.sfx, String(a.name || ""))].filter(Boolean);
-        if (!names.length) return { success: false, message: "لا يوجد ما يُسترجع" };
-        let ok = 0; const errs = [];
-        for (const n of names) {
-            const bk = path.join(BK_DIR, n);
-            if (!fs.existsSync(bk)) { errs.push(n + ": لا توجد نسخة احتياطية"); continue; }
-            try { const dest = path.join(g.sfx, n), tmp = dest + ".canew"; fs.copyFileSync(bk, tmp); fs.renameSync(tmp, dest); delete rec[n]; ok++; } catch (er) { errs.push(n + ": " + gta.errMessage(er)); }
-        }
-        writeRec(rec);
-        return { success: ok > 0, restored: ok, message: ok ? `تم استرجاع ${ok} ملف للأصل` : errs[0] || "فشل الاسترجاع", errors: errs };
-    });
-    return { installLibrary, readPath };
-};
+});
+$("tabsS").addEventListener("click", (e) => { const b = e.target.closest("[data-t]"); if (!b) return; document.querySelectorAll("#tabsS .cchip").forEach((x) => x.classList.toggle("on", x === b)); $("pLib").classList.toggle("hidden", b.dataset.t !== "lib"); $("pMine").classList.toggle("hidden", b.dataset.t !== "mine"); });
+window.api.onDownloadProgress((d) => { const b = $("bar"), t = $("dtxt"); if (b) b.style.width = d.percent + "%"; if (t) t.textContent = `${d.percent}%` + (d.speed && d.speed !== "0" ? ` · ${d.speed} MB/s` : ""); });
+window.api.onInstallStatus((d) => { const t = $("dtxt"); if (t && d.msg) t.textContent = d.msg; });
+(async () => {
+    const S = await window.CA.ready; if (!S) return;
+    await loadGta(false);
+    const L = await window.CA.getLibrary(true);
+    LIB = (L && L.success && L.sounds) || [];
+    renderLib(); renderMine();
+})();
