@@ -635,16 +635,23 @@ function httpsGet(url, headers = {}, maxR = 10) {
    DOWNLOAD:START
 ============================================================ */
 async function doDownload({ url, product, name, sha256, maxBytes }) {
-    if (dlState.running) return { success: false, message: "Download already in progress" };
+    if (dlState.running) return { success: false, message: "هناك عملية تحميل جارية، انتظر حتى تنتهي", code: "BUSY" };
     return new Promise(async (resolve) => {
         try {
             const zipPath = path.join(app.getPath("temp"), `${product}_${Date.now()}.zip`);
             const finalUrl = resolveGDrive(url);
             const response = await httpsGet(finalUrl);
+            if (response.statusCode >= 400) {
+                try { response.destroy(); } catch {}
+                const hint = response.statusCode === 403 ? " (الرابط منتهٍ أو مرفوض من خادم الملفات)" : response.statusCode === 404 ? " (الملف غير موجود على الرابط)" : "";
+                dlState.running = false; dlState.stage = "error";
+                resolve({ success: false, message: "رفض خادم الملفات التحميل: HTTP " + response.statusCode + hint, code: "HTTP_" + response.statusCode });
+                return;
+            }
             // Skip content-type check for new server
             const isNewServer = finalUrl.includes("213.199.63.97");
             if (!isNewServer && (response.headers["content-type"] || "").includes("text/html")) {
-                resolve({ success: false, message: "Invalid response" });
+                resolve({ success: false, message: "الرابط لا يعيد ملفاً بل صفحة ويب. تأكد أن الرابط مباشر", code: "NOT_FILE" });
                 return;
             }
             const total = parseInt(response.headers["content-length"] || "0");

@@ -62,12 +62,19 @@ document.addEventListener("click", async (e) => {
     }
 });
 $("tabsS").addEventListener("click", (e) => { const b = e.target.closest("[data-t]"); if (!b) return; document.querySelectorAll("#tabsS .cchip").forEach((x) => x.classList.toggle("on", x === b)); $("pLib").classList.toggle("hidden", b.dataset.t !== "lib"); $("pMine").classList.toggle("hidden", b.dataset.t !== "mine"); });
-window.api.onDownloadProgress((d) => { const b = $("bar"), t = $("dtxt"); if (b) b.style.width = d.percent + "%"; if (t) t.textContent = `${d.percent}%` + (d.speed && d.speed !== "0" ? ` · ${d.speed} MB/s` : ""); });
-window.api.onInstallStatus((d) => { const t = $("dtxt"); if (t && d.msg) t.textContent = d.msg; });
+window.api.onDownloadProgress?.((d) => { const b = $("bar"), t = $("dtxt"); if (b) b.style.width = d.percent + "%"; if (t) t.textContent = `${d.percent}%` + (d.speed && d.speed !== "0" ? ` · ${d.speed} MB/s` : ""); });
+window.api.onInstallStatus?.((d) => { const t = $("dtxt"); if (t && d.msg) t.textContent = d.msg; });
 (async () => {
-    const S = await window.CA.ready; if (!S) return;
-    await loadGta(false);
-    const L = await window.CA.getLibrary(true);
-    LIB = (L && L.success && L.sounds) || [];
-    renderLib(); renderMine();
+    try {
+        const S = await Promise.race([window.CA.ready, new Promise((r) => setTimeout(() => r("timeout"), 12000))]);
+        if (!S || S === "timeout") { $("gtaBox").innerHTML = `<div class="empty"><p>تعذّر تحميل الجلسة. أعد فتح الصفحة.</p></div>`; return; }
+        try { await Promise.race([loadGta(false), new Promise((_, j) => setTimeout(() => j(new Error("انتهت مهلة البحث عن اللعبة")), 20000))]); }
+        catch (e) { G = { success: false, message: (e && e.message) || "تعذّر البحث عن اللعبة" }; gtaBox(); }
+        try { const L = await window.CA.getLibrary(true); LIB = (L && L.success && L.sounds) || []; } catch { LIB = []; }
+        renderLib(); renderMine();
+    } catch (e) {
+        console.error(e);
+        $("gtaBox").innerHTML = `<div class="empty"><p>حدث خطأ أثناء فتح الصفحة: ${esc((e && e.message) || "")}</p></div>`;
+        $("grid").innerHTML = "";
+    }
 })();

@@ -260,7 +260,7 @@ function fail(msg) {
     if (msg) setStatus(msg, "err");
     localStorage.removeItem("active_dl_name");
     logOnce("fail");
-    toast("فشلت العملية، حاول مرة أخرى", "error");
+    toast(msg ? "فشلت العملية: " + msg : "فشلت العملية، حاول مرة أخرى", "error", 6000);
     notifyOS("Ca Store", "فشلت العملية");
 }
 function canceled() {

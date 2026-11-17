@@ -297,8 +297,23 @@
         /* استوديو CA: مخفي إلى أن يتأكد الخادم أن الحساب يملك الرول */
         const sBtn = aside.querySelector('.nav-item[data-file="studio.html"]');
         if (sBtn) {
-            sBtn.classList.add("hidden");
-            try { window.api.studio.access().then((r) => { if (r && r.allowed) { sBtn.classList.remove("hidden"); window.__studioOk = true; } }).catch(() => {}); } catch {}
+            const isStudioPage = /studio\.html/i.test(location.pathname);
+            if (!isStudioPage) sBtn.classList.add("hidden");
+            const checkStudio = (manual) => {
+                try {
+                    return window.api.studio.access().then((r) => {
+                        const ok = !!(r && r.allowed);
+                        const was = window.__studioOk; window.__studioOk = ok;
+                        sBtn.classList.toggle("hidden", !ok && !isStudioPage);
+                        if (manual) toast(ok ? "استوديو CA مفعّل لحسابك" : "لا يوجد لديك الرول المطلوب حالياً", ok ? "success" : "info", 3000);
+                        if (ok && was === false) toast("تم تفعيل استوديو CA لحسابك", "success", 3500);
+                    }).catch(() => { if (manual) toast("تعذّر الاتصال بالخادم", "error"); });
+                } catch { return Promise.resolve(); }
+            };
+            window.__checkStudio = checkStudio;
+            checkStudio(false);
+            setInterval(() => checkStudio(false), 45000);
+            window.addEventListener("focus", () => checkStudio(false));
         }
         return aside;
     }
@@ -314,8 +329,10 @@
             <span class="tpill hidden" id="pillDl">${ic("download")}<span id="pillDlTxt"></span></span>
             <span class="tpill" id="pillConn"><span class="d"></span><span id="pillConnTxt">فحص...</span></span>
             ${plan ? `<span class="tpill">${ic("crown")}${esc(plan)}</span>` : ""}
+            <button class="tpill" id="pillRefresh" title="تحديث الصلاحيات (بعد إعطاء رول)">${ic("refresh")}</button>
             <button class="tpill" id="pillNews" title="الأخبار">${ic("bell")}<span class="cnt hidden" id="newsCnt"></span></button>`;
         el.querySelector("#pillNews").addEventListener("click", () => go("news.html"));
+        el.querySelector("#pillRefresh").addEventListener("click", async (e) => { const b = e.currentTarget; b.classList.add("spin"); try { await (window.__checkStudio ? window.__checkStudio(true) : Promise.resolve()); } finally { setTimeout(() => b.classList.remove("spin"), 600); } });
         el.querySelector("#pillDl").addEventListener("click", () => go("downloads.html"));
         return el;
     }
