@@ -197,7 +197,7 @@ module.exports = function initV4(ctx) {
 
     async function installItem(a) {
         a = a || {};
-        if (a.type === "sound") return sounds.installLibrary(a);
+        if (a.type === "sound") return sounds ? sounds.installLibrary(a) : { success: false, message: "وحدة الساوندات غير متاحة في هذه النسخة" };
         if (!["mod", "pack", "preset", "custom"].includes(a.type)) return { success: false, message: "نوع غير مدعوم" };
         if (busy || dlState.running) return { success: false, message: "هناك عملية جارية، انتظر حتى تنتهي", code: "BUSY" };
         const fp = readFivemPath();
@@ -260,10 +260,20 @@ module.exports = function initV4(ctx) {
             return { success: false, message: "حدث خطأ أثناء التثبيت" };
         } finally { busy = false; dlState.running = false; }
     }
-    require("./studio")({ ipcMain, dialog, getMain, readFivemPath, app, request });
-    const sounds = require("./sounds")({ app, ipcMain, dialog, getMain, request, report, doDownload, dlState, setStage, getBusy: () => busy, setBusy: (v) => { busy = v; }, findItem });
     ipcMain.handle("lib:install", (e, a) => installItem(a));
-
+    /* تحميل الوحدات الإضافية بأمان: إن فشل تحميل وحدة لا يتعطل باقي البرنامج، ويظهر السبب الحقيقي للمستخدم */
+    let sounds = null;
+    const loadMod = (label, channels, fn) => {
+        try { fn(); }
+        catch (e) {
+            const msg = `تعذّر تشغيل «${label}» في هذه النسخة: ` + ((e && e.message) || e);
+            console.error("[v4] " + msg + "\n" + ((e && e.stack) || ""));
+            try { fs.appendFileSync(path.join(app.getPath("userData"), "ca-errors.log"), new Date().toISOString() + " " + msg + "\n" + ((e && e.stack) || "") + "\n"); } catch {}
+            for (const c of channels) { try { ipcMain.removeHandler && ipcMain.removeHandler(c); ipcMain.handle(c, () => (c === "studio:access" ? { success: true, allowed: false, message: msg } : { success: false, message: msg })); } catch {} }
+        }
+    };
+    loadMod("CA Studio", ["studio:access"], () => require("./studio")({ ipcMain, dialog, getMain, readFivemPath, app, request }));
+    loadMod("ساوندات الأسلحة", ["gta:detect", "gta:select", "gta:state", "gta:installLocal", "gta:installLocalAs", "gta:restore"], () => { sounds = require("./sounds")({ app, ipcMain, dialog, getMain, request, report, doDownload, dlState, setStage, getBusy: () => busy, setBusy: (v) => { busy = v; }, findItem }); });
     ipcMain.handle("lib:installBundle", async (e, id) => {
         const b = findItem("bundle", id);
         if (!b) return { success: false, results: [], message: "الحزمة غير موجودة" };
