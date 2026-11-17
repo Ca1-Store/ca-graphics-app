@@ -49,6 +49,11 @@ contextBridge.exposeInMainWorld("api", {
             add:    () => ipcRenderer.invoke("studio:pv:add"),
             remove: (n) => ipcRenderer.invoke("studio:pv:remove", n),
         },
+        tpl: {
+            list: () => ipcRenderer.invoke("studio:tpl:list"),
+            get: (n) => ipcRenderer.invoke("studio:tpl:get", n),
+            installWeather: (n, t) => ipcRenderer.invoke("studio:tpl:installWeather", n, t),
+        },
         fx: {
             detect:  () => ipcRenderer.invoke("studio:fx:detect"),
             ensure:  () => ipcRenderer.invoke("studio:fx:ensure"),

@@ -58,35 +58,41 @@
 
     /* ============================ الهيكل العام ============================ */
     function head() {
-        const has = !!S.model;
+        const has = S.mod === "wx" ? WXUI.hasModel() : !!S.model;
+        const MODS = [["tc", "palette", "Timecycle", "ألوان وتأثيرات الشاشة (timecycle_mods)"], ["wx", "sun", "الطقس والسماء", "سماء وغيوم وشمس وضباب لكل طقس"], ["fx", "drop", "BloodFX", "لون الدم ومؤثراته"], ["tools", "sliders", "أدوات عامة", "تعديل جماعي لملف Timecycle"]];
+        const isFx = S.mod === "fx", nm = ((S.mod === "wx" ? WXUI.name() : S.name) || "");
         return `<div class="st-head">
-            <div class="st-logo"><div class="st-mark">CA</div><div><b>CA Studio</b><small>محرّر الجرافيكس</small></div></div>
-            <div class="st-mods">
-                <button class="st-mod ${S.mod === "tc" ? "on" : ""}" data-act="mod" data-m="tc">${ic("palette")}Timecycle</button>
-                <button class="st-mod ${S.mod === "fx" ? "on" : ""}" data-act="mod" data-m="fx">${ic("drop")}BloodFX</button>
-                <button class="st-mod ${S.mod === "tools" ? "on" : ""}" data-act="mod" data-m="tools">${ic("sliders")}أدوات عامة</button>
+            <div class="st-top">
+                <div class="st-logo"><div class="st-mark">CA</div><div><b>CA Studio</b><small>محرّر الجرافيكس</small></div></div>
+                <div class="st-mods" data-tour="tabs">${MODS.map(([k, i, t, d]) => `<button class="st-mod ${S.mod === k ? "on" : ""}" data-act="mod" data-m="${k}" title="${d}">${ic(i)}<span><b>${t}</b><small>${d}</small></span></button>`).join("")}</div>
+                <button class="btn btn-help" data-act="tour" data-tour="help" title="شرح كل زر في الصفحة خطوة بخطوة">${ic("help")}شرح الاستخدام</button>
             </div>
-            <span class="st-sp"></span>
-            <span id="hDirty" class="st-dirty hidden">تعديلات غير محفوظة</span>
-            ${S.mod !== "fx" ? `<span class="st-file ${has ? "has" : ""}" id="hFile">${esc(S.name || "لا يوجد ملف")}</span>
-            <button class="btn btn-sm" data-act="undo" id="hUndo" title="Ctrl+Z" disabled>${ic("undo")}تراجع</button>
-            <button class="btn btn-sm" data-act="open">${ic("folder")}فتح</button>
-            <button class="btn btn-sm" data-act="newfile">${ic("plus")}ملف جديد</button>
-            <button class="btn btn-sm" data-act="detect">${ic("search")}كشف من FiveM</button>
-            <button class="btn btn-sm" data-act="saveas" ${has ? "" : "disabled"}>${ic("copy")}حفظ كنسخة</button>
-            <button class="btn btn-sm btn-st" data-act="save" id="hSave" ${has ? "" : "disabled"}>${ic("check")}حفظ والتحقق</button>` : ""}
+            ${isFx ? "" : `<div class="st-bar">
+                <span class="st-file ${has ? "has" : ""}" id="hFile" data-tour="file">${ic("file")}<span>${esc(nm || "لم تفتح أي ملف بعد")}</span></span>
+                <span id="hDirty" class="st-dirty hidden">● تعديلات غير محفوظة</span>
+                <span class="st-sp"></span>
+                <div class="st-grp"><button class="btn btn-sm" data-act="open" data-tour="open" title="افتح ملفاً موجوداً من جهازك">${ic("folder")}فتح ملف</button>
+                    <button class="btn btn-sm" data-act="${S.mod === "wx" ? "tplpick" : "newfile"}" data-tour="create" title="ينشئ البرنامج الملف لك بدلاً من البحث عنه">${ic("plus")}إنشاء ملف</button>
+                    <button class="btn btn-sm" data-act="detect" data-tour="detect" title="يبحث عن الملفات داخل FiveM تلقائياً">${ic("search")}كشف من FiveM</button></div>
+                <div class="st-grp"><button class="btn btn-sm" data-act="undo" id="hUndo" data-tour="undo" title="Ctrl+Z" disabled>${ic("undo")}تراجع</button>
+                    <button class="btn btn-sm" data-act="saveas" data-tour="saveas" ${has ? "" : "disabled"} title="يحفظ نسخة جديدة دون المساس بالأصل">${ic("copy")}حفظ كنسخة</button>
+                    <button class="btn btn-sm btn-st" data-act="save" id="hSave" data-tour="save" ${has ? "" : "disabled"} title="Ctrl+S — يتحقق من الملف قبل الكتابة ويحفظ نسخة احتياطية">${ic("check")}حفظ</button></div>
+            </div>`}
         </div>`;
     }
     function updHead() {
-        const d = $q("#hDirty"); if (d) d.classList.toggle("hidden", S.mod === "fx" ? !(S.fx.model && FX.changed(S.fx.model)) : !dirty());
-        const u = $q("#hUndo"); if (u) u.disabled = !S.hist.length;
-        const f = $q("#hFile"); if (f) { f.textContent = S.name || "لا يوجد ملف"; f.classList.toggle("has", !!S.model); }
-        const sv = $q("#hSave"); if (sv) sv.disabled = !S.model;
+        const wx = S.mod === "wx";
+        const d = $q("#hDirty"); if (d) d.classList.toggle("hidden", wx ? !WXUI.dirty() : S.mod === "fx" ? !(S.fx.model && FX.changed(S.fx.model)) : !dirty());
+        const u = $q("#hUndo"); if (u) u.disabled = wx ? !WXUI.histLen() : !S.hist.length;
+        const f = $q("#hFile"); if (f) { const sp = f.querySelector("span"); if (sp) sp.textContent = (wx ? WXUI.name() : S.name) || "لم تفتح أي ملف بعد"; f.classList.toggle("has", wx ? WXUI.hasModel() : !!S.model); }
+        const sv = $q("#hSave"); if (sv) sv.disabled = wx ? !WXUI.hasModel() : !S.model;
     }
     function renderAll() {
-        const body = S.mod === "tc" ? tcView() : S.mod === "fx" ? fxView() : toolsView();
+        const body = S.mod === "tc" ? tcView() : S.mod === "wx" ? WXUI.view() : S.mod === "fx" ? fxView() : toolsView();
         root.innerHTML = head() + body;
         updHead();
+        if (S.mod === "wx") WXUI.after();
+        if (S.mod === "fx" && S.fx.model) FXUI.after();
         if (S.mod === "tc" && S.model) { S.items = TC.items(curMod() || { tags: [] }); drawPreview(); }
     }
 
@@ -116,15 +122,15 @@
         if (!S.model) return emptyTc();
         const m = curMod();
         return `<div class="tc">
-            <div class="card tc-l">
+            <div class="card tc-l" data-tour="tc-list">
                 <div class="sr"><input class="inp" id="q" placeholder="ابحث عن معدّل…" value="${esc(S.q)}" style="direction:ltr"><div class="chips">
                     ${[["all", "الكل"], ["tags", "فيه وسوم"], ["chg", "المعدّلة"]].map(([k, l]) => `<button class="cchip ${S.filter === k ? "on" : ""}" data-act="flt" data-k="${k}">${l}</button>`).join("")}</div>
                     <small style="color:var(--text-3);font-size:11px">${S.model.mods.length} معدّل · ${S.model.mods.reduce((a, x) => a + x.tags.length, 0)} وسم</small></div>
                 <div class="mlist" id="mlist">${listHtml()}</div>
                 <div class="ft"><button class="btn btn-sm" data-act="newmod">${ic("plus")}جديد</button><button class="btn btn-sm" data-act="clone" ${m ? "" : "disabled"}>${ic("copy")}نسخ</button><button class="btn btn-sm btn-danger" data-act="delmod" ${m ? "" : "disabled"}>${ic("trash")}</button></div>
             </div>
-            <div class="tc-c" id="center">${m ? centerHtml(m) : '<div class="card empty-line" style="padding:40px">اختر معدّلاً من القائمة</div>'}</div>
-            <div class="tc-r">${rightHtml(m)}</div>
+            <div class="tc-c" id="center" data-tour="tc-edit">${m ? centerHtml(m) : '<div class="card empty-line" style="padding:40px">اختر معدّلاً من القائمة</div>'}</div>
+            <div class="tc-r" data-tour="tc-prev">${rightHtml(m)}</div>
         </div>`;
     }
     function rowHtml(it, i) {
@@ -306,30 +312,33 @@
     }
     function fxView() {
         const F = S.fx, inf = F.info, M = F.model;
-        const left = `<div class="card sect"><h4>${ic("folder")}مجلد effects</h4>
+        const left = `<div class="card sect" data-tour="fx-folder"><h4>${ic("folder")}مجلد effects</h4>
                 ${inf && inf.success ? `<div class="pathbox">${esc(inf.dir)}</div><div style="margin:8px 0;font-size:12px;color:${inf.exists ? "var(--ok)" : "var(--warn)"}">${inf.exists ? "المجلد موجود" : "المجلد غير موجود — سننشئه عند التثبيت"}</div>`
                     : `<div style="font-size:12.5px;color:var(--text-3);line-height:1.8;margin-bottom:8px">${esc(inf ? inf.message : "اضغط «كشف» ليجد البرنامج مجلد FiveM تلقائياً.")}</div>`}
                 <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm" data-act="fxdetect">${ic("search")}كشف</button>${inf && inf.success && !inf.exists ? `<button class="btn btn-sm" data-act="fxensure">${ic("plus")}إنشاء المجلد</button>` : ""}<button class="btn btn-sm btn-st" data-act="fximport">${ic("upload")}استيراد ملف .dat</button></div></div>
-            ${inf && inf.success ? `<div class="card sect fxlist"><h4>ملفات .dat الحالية</h4>${inf.files.length ? inf.files.map((f) => `<button class="it ${F.name === f.name && F.installed ? "on" : ""}" data-act="fxopen" data-n="${esc(f.name)}">${ic("file")}${esc(f.name)}<small>${Math.round(f.size / 1024 * 10) / 10}KB</small></button>`).join("") : '<div class="empty-line">لا توجد ملفات بعد</div>'}</div>` : ""}`;
+            ${inf && inf.success ? `<div class="card sect fxlist"><h4>ملفات .dat الحالية</h4>${inf.files.length ? inf.files.map((f) => `<button class="it ${F.name === f.name && F.installed ? "on" : ""}" data-act="fxopen" data-n="${esc(f.name)}">${ic("file")}${esc(f.name)}<small>${Math.round(f.size / 1024 * 10) / 10}KB</small></button>`).join("") : `<div class="empty-line">لا توجد ملفات بعد</div><button class="btn btn-sm btn-st" data-act="tplfx" style="margin:8px">${ic("plus")}إنشاء bloodfx.dat تلقائياً</button>`}</div>` : ""}`;
         let right;
-        if (!M) right = `<div class="card pane" style="padding:34px;text-align:center;align-items:center"><div class="icon-tile" style="width:68px;height:68px;border-radius:20px">${ic("drop")}</div><h3 style="color:#fff;font-size:18px">BloodFX</h3>
-                <p style="color:var(--text-3);font-size:13px;max-width:480px;line-height:1.8">استورد ملف BloodFX (.dat) الذي تريده ثم ثبّته مباشرة في <span class="ltr">citizen\\common\\data\\effects</span>. إن لم يكن المجلد موجوداً ينشئه البرنامج. يمكنك أيضاً ضبط شدة الدم بمضاعف قبل التثبيت، والرجوع للأصل بضغطة.</p>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn btn-st" data-act="fximport">${ic("upload")}استيراد ملف .dat</button><button class="btn" data-act="fxdetect">${ic("search")}فتح من FiveM</button></div></div>`;
-        else {
+        if (!M) right = `<div class="card hero"><div class="hero-ic">${ic("drop")}</div><h3>BloodFX — التحكم في الدم</h3>
+                <p>غيّر لون الدم ومؤثراته وأنواع الإصابات بواجهة مبسّطة، ثم ثبّت الملف مباشرة في FiveM.</p>
+                <div class="steps3"><div><i>1</i><b>ابدأ بملف</b><small>أنشئه تلقائياً أو افتح ملفك</small></div><div><i>2</i><b>عدّل</b><small>اللون والمؤثرات وأنواع الإصابات</small></div><div><i>3</i><b>ثبّت</b><small>يُكتب في <span class="ltr">citizen\\common\\data\\effects</span></small></div></div>
+                <div class="hero-act"><button class="btn btn-st" data-act="tplfx">${ic("plus")}إنشاء ملف BloodFX تلقائياً</button><button class="btn" data-act="fximport">${ic("upload")}فتح ملف .dat من جهازي</button><button class="btn" data-act="fxdetect">${ic("search")}فتح من FiveM</button></div>
+                <small class="hero-note">إن لم يوجد مجلد effects ينشئه البرنامج عند التثبيت.</small></div>`;
+            else {
             const n = FX.changed(M), all = M.lines.filter((l) => l.kind === "d");
-            right = `<div class="card sect"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            right = `<div class="card sect" data-tour="fx-install"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                     <div class="fld" style="flex:1;min-width:200px"><label>اسم الملف عند التثبيت</label><input class="inp ltr" id="fxName" value="${esc(F.name)}"></div>
                     <button class="btn btn-st" data-act="fxinstall" style="align-self:flex-end">${ic("download")}تثبيت في FiveM</button>
                     <button class="btn" data-act="fxrestore" style="align-self:flex-end" ${inf && inf.success ? "" : "disabled"}>${ic("undo")}استرجاع الأصل</button></div>
                     <small style="display:block;color:var(--text-3);font-size:11.5px;margin-top:8px;line-height:1.7">أغلق FiveM قبل التثبيت. تُحفظ نسخة من ملفك الأصلي تلقائياً أول مرة (داخل بيانات البرنامج) ويمكن استرجاعها.</small></div>
-                <div class="card sect"><h4>${ic("zap")}ضبط الشدّة (من القيم الأصلية)</h4>
+                ${FX.isBlood(M) ? FXUI.tabs() + FXUI.content(M) : ""}
+                ${(!FX.isBlood(M) || FXUI.isAdv()) ? `<div class="card sect"><h4>${ic("zap")}ضبط الشدّة (من القيم الأصلية)</h4>
                     <div class="mult">${[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3].map((x) => `<button class="cchip ${F.mult === x ? "on" : ""}" data-act="fxmult" data-x="${x}">×${x}</button>`).join("")}
                     <input class="inp" id="fxCustom" type="number" step="0.05" min="0" max="20" value="${F.mult}" style="width:84px;height:30px;direction:ltr">
                     <label style="display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--text-2)"><input type="checkbox" id="fxInts" ${F.ints ? "checked" : ""}> تضمين الأرقام الصحيحة</label></div>
                     <small style="display:block;color:var(--text-3);font-size:11.5px;margin-top:8px;line-height:1.7">يؤثّر المضاعف على الأرقام ذات الفاصلة (البرتقالية) في الأسطر المحدّدة فقط. الأرقام الصحيحة قد تكون أعداداً أو أعلاماً فلا تُمَسّ افتراضياً.</small></div>
                 <div class="card" style="overflow:hidden"><div class="chrow" style="background:rgba(255,255,255,.03)"><label style="display:flex;gap:8px;align-items:center;direction:rtl"><input type="checkbox" id="fxAll" ${F.sel.size === all.length ? "checked" : ""} style="accent-color:#ff9a7a"> تحديد الكل (${F.sel.size}/${all.length})</label><span class="t"></span><span class="d">${n} رقم معدّل</span>
                     <button class="btn btn-sm" data-act="fxtoggleraw">${F.raw ? "الجدول" : "النص الخام"}</button><button class="btn btn-sm" data-act="fxreset">${ic("refresh")}إرجاع</button></div>
-                    ${F.raw ? `<textarea class="txt ltr" id="fxRaw" style="min-height:420px;border:0;border-radius:0;font-family:Consolas,monospace;font-size:12px" spellcheck="false">${esc(FX.build(M))}</textarea>` : `<div class="chlist" style="max-height:520px">${fxRows(M)}</div>`}</div>`;
+                    ${F.raw ? `<textarea class="txt ltr" id="fxRaw" style="min-height:420px;border:0;border-radius:0;font-family:Consolas,monospace;font-size:12px" spellcheck="false">${esc(FX.build(M))}</textarea>` : `<div class="chlist" style="max-height:520px">${fxRows(M)}</div>`}</div>` : ""}`;
         }
         return `<div class="fxg"><div class="pane">${left}</div><div class="pane">${right}</div></div>`;
     }
@@ -357,9 +366,10 @@
 
     /* ============================ الإجراءات ============================ */
     function loadXml(text, name) {
+        if (window.WX.isWeather(text)) return WXUI.load(text, name);
         const p = TC.parse(text); if (p.error) { toast("ملف غير مدعوم: " + p.error, "error", 5000); return false; }
         S.text = S.base = text; S.name = name; S.model = p; S.hist = []; S.struct = 0; S.isNew = false; rebase();
-        S.sel = Math.max(0, p.mods.findIndex((m) => m.tags.length)); S.q = ""; S.filter = "all"; S.mod = S.mod === "fx" ? "tc" : S.mod;
+        S.sel = Math.max(0, p.mods.findIndex((m) => m.tags.length)); S.q = ""; S.filter = "all"; S.mod = (S.mod === "fx" || S.mod === "wx") ? "tc" : S.mod;
         renderAll(); toast(`فُتح ${name} — ${p.mods.length} معدّل`); return true;
     }
     async function doOpen() { const r = await api.open(); if (r.canceled) return; if (!r.success) return toast(r.message || "تعذّر فتح الملف", "error"); loadXml(r.text, r.name); }
@@ -419,6 +429,7 @@
     root.addEventListener("click", async (e) => {
         const b = e.target.closest("[data-act]"); if (!b) return;
         const a = b.dataset.act, m = curMod();
+        if (S.mod === "wx" && (a === "undo" || a === "save" || a === "saveas")) { if (a === "undo") WXUI.undo(); else await WXUI.save(a === "saveas"); return; }
         try {
             switch (a) {
                 case "mod": S.mod = b.dataset.m; if (S.mod === "fx" && !S.fx.info) { renderAll(); fxDetect(true); } else renderAll(); break;
@@ -426,6 +437,9 @@
                 case "detect": await doDetect(); break;
                 case "save": await doSave(); break;
                 case "saveas": await doSave(true); break;
+                case "tour": V2.tour(S.mod); break;
+                case "tplpick": V2.templates("weather"); break;
+                case "tplfx": { const g = await api.tpl.get("bloodfx.dat"); if (!g.success) return toast(g.message || "تعذّر فتح القالب", "error"); fxLoad("bloodfx.dat", g.text, false); toast("أُنشئ ملف BloodFX بقيمه الأساسية — اضغط «تثبيت في FiveM» عندما تنتهي"); break; }
                 case "newfile": if (dirty() && !await askConfirm({ title: "ملف جديد", message: "توجد تعديلات غير محفوظة ستضيع. متابعة؟", confirmText: "متابعة" })) break; newFile(); break;
                 case "pvadd": { const r = await api.pv.add(); if (r.canceled) break; if (!r.success) return toast(r.message || "فشل", "error"); const l = await api.pv.list(); S.pvImgs = l.items || []; S.pvBase = r.name; renderAll(); toast("أُضيفت اللقطة ✓"); break; }
                 case "pvdel": { if (!S.pvBase.startsWith("pv_")) break; if (!await askConfirm({ title: "حذف اللقطة", message: "ستُحذف من البرنامج فقط.", confirmText: "حذف", danger: true })) break; await api.pv.remove(S.pvBase); PV.cache.delete(S.pvBase); const l = await api.pv.list(); S.pvImgs = l.items || []; S.pvBase = "day"; renderAll(); break; }
@@ -497,4 +511,8 @@
     }
     window.CA.ready.then(async () => { let r = null; try { r = await api.access(); } catch {} if (r && r.allowed) { try { const l = await api.pv.list(); S.pvImgs = (l && l.items) || []; } catch {} renderAll(); } else lockedView(); });
     window.__studio = { S, loadXml, renderAll };
+    WXUI.init({ root, ic, esc, toast, confirm: askConfirm, api, mode: () => S.mod, setMode: (m) => { S.mod = m; renderAll(); }, rerender: renderAll, upd: updHead });
+    FXUI.init({ root, ic, esc, toast, rerender: renderAll, model: () => S.fx.model });
+    V2.init({ api, toast, dialog, esc, openTemplate: (kind, name, text) => { if (kind === "weather") WXUI.load(text, name, { installAs: name }); else { fxLoad(name, text, false); } } });
+    setTimeout(() => V2.firstRun(S.mod), 1500);
 })();

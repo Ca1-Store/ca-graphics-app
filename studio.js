@@ -36,7 +36,7 @@ module.exports = function initStudio(ctx) {
             if (out.length >= 60) return;
             const full = path.join(dir, e.name);
             if (e.isDirectory()) { if (!/^(cache|logs|crashes|dunno)$/i.test(e.name)) walk(full, depth - 1, out); }
-            else if (/timecycle.*\.xml$/i.test(e.name) || /^w_.*\.xml$/i.test(e.name)) out.push(full);
+            else if (/timecycle.*\.xml$/i.test(e.name) || /^w_.*\.xml$/i.test(e.name) || (/\.xml$/i.test(e.name) && /timecycle/i.test(path.basename(dir)))) out.push(full);
         }
     }
 
@@ -140,6 +140,38 @@ module.exports = function initStudio(ctx) {
             let name = path.basename(r.filePaths[0]).replace(/\.txt$/i, ".dat"); if (!safeName(name)) name = "bloodfx.dat";
             return { success: true, name, text: buf.toString("utf8") };
         } catch (er) { return { success: false, message: er.message }; }
+    });
+
+    /* ---------------- قوالب جاهزة (ملفات الطقس وbloodfx.dat) ---------------- */
+    const TPL_DIR = path.join(__dirname, "templates");
+    const TPL_LABELS = { "w_clear.xml": "صافٍ", "w_clearing.xml": "صحو بعد المطر", "w_clouds.xml": "غائم", "w_extrasunny.xml": "مشمس جداً", "w_foggy.xml": "ضباب", "w_halloween.xml": "هالوين", "w_neutral.xml": "محايد", "w_overcast.xml": "ملبّد بالغيوم", "w_rain.xml": "مطر", "w_smog.xml": "ضباب دخاني", "w_snow.xml": "ثلج", "w_snowlight.xml": "ثلج خفيف", "w_thunder.xml": "عاصفة رعدية", "w_xmas.xml": "عيد الميلاد (ثلج)", "w_blizzard.xml": "عاصفة ثلجية", "underwater_deep.xml": "تحت الماء (عميق)", "bloodfx.dat": "ملف الدم BloodFX" };
+    const tplList = () => { try { return fs.readdirSync(TPL_DIR).filter((n) => /^(w_\w+\.xml|underwater_\w+\.xml|bloodfx\.dat)$/i.test(n)).sort(); } catch { return []; } };
+    const timecycleDir = () => { const i = effectsInfo(); return i ? path.join(path.dirname(i.dir), "timecycle") : null; };
+    ipcMain.handle("studio:tpl:list", () => {
+        const dir = timecycleDir(), fxi = effectsInfo();
+        return { success: true, fivem: !!dir, items: tplList().map((n) => {
+            const isFx = /\.dat$/i.test(n); let exists = false;
+            try { exists = fs.existsSync(path.join(isFx ? (fxi ? fxi.dir : "") : (dir || ""), n)); } catch {}
+            return { name: n, kind: isFx ? "bloodfx" : "weather", label: TPL_LABELS[n] || n, exists };
+        }) };
+    });
+    ipcMain.handle("studio:tpl:get", (e, name) => {
+        if (!tplList().includes(String(name))) return { success: false, message: "قالب غير معروف" };
+        try { return { success: true, name, text: fs.readFileSync(path.join(TPL_DIR, name), "utf8") }; } catch (er) { return { success: false, message: er.message }; }
+    });
+    ipcMain.handle("studio:tpl:installWeather", (e, name, text) => {
+        const dir = timecycleDir(); name = String(name || "");
+        if (!dir) return { success: false, noFivem: true, message: "لم نجد مجلد FiveM. حدّد مساره من الإعدادات أو احفظ كنسخة" };
+        if (!/^(w_\w{1,40}|underwater_\w{1,40})\.xml$/i.test(name)) return { success: false, message: "اسم ملف غير صالح" };
+        text = String(text == null ? "" : text); if (text.length < 100 || text.length > 8 * 1024 * 1024 || text.includes("\0") || !/<timecycle_keyframe_data\b/.test(text.slice(0, 4000))) return { success: false, message: "محتوى غير صالح" };
+        try {
+            fs.mkdirSync(dir, { recursive: true });
+            const target = path.join(dir, name), bk = path.join(bkRoot(), "tc"); fs.mkdirSync(bk, { recursive: true });
+            const bf = path.join(bk, name), none = bf + ".none";
+            if (!fs.existsSync(bf) && !fs.existsSync(none)) { if (fs.existsSync(target)) fs.copyFileSync(target, bf); else fs.writeFileSync(none, ""); }
+            const tmp = target + ".canew"; fs.writeFileSync(tmp, text, "utf8"); fs.renameSync(tmp, target);
+            return { success: true, path: target, backup: fs.existsSync(bf) };
+        } catch (er) { return { success: false, message: er.code === "EACCES" || er.code === "EPERM" ? "ليس لدى البرنامج صلاحية الكتابة هنا" : (er.message || "فشل التثبيت") }; }
     });
     ipcMain.handle("studio:fx:install", (e, name, text) => {
         const info = effectsInfo(), n = safeName(name); if (!info || !n) return { success: false, message: "تعذّر تحديد مجلد effects" };
