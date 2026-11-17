@@ -12,6 +12,7 @@ function gtaBox() {
     }
 }
 async function loadGta(force) {
+    if (!window.api || !window.api.gta) throw new Error(MISSING);
     let r = await window.api.gta.detect(force);
     if (r && r.success) { const s = await window.api.gta.state(); G = Object.assign({}, r, s && s.success ? { files: s.files } : {}); } else G = r;
     gtaBox();
@@ -47,8 +48,12 @@ async function chooseTarget(r) {
     const d = window.CA.dialog({ title: "اختر الملف المراد استبداله", body: `<p style="color:var(--text-2);font-size:13px">«${esc(r.fileName)}» لا يطابق اسم أي ملف في المجلد. اختر الملف الذي سيحلّ محلّه:</p><select class="sel ltr" id="tg">${r.candidates.map((c) => `<option>${esc(c)}</option>`).join("")}</select>`, footer: `<button class="btn" data-dlg="close">إلغاء</button><button class="btn btn-primary" id="tgGo">استبدال</button>` });
     d.el.querySelector("#tgGo").addEventListener("click", async () => { const t = d.el.querySelector("#tg").value; d.close(); const x = await window.api.gta.installLocalAs(r.token, t); await afterInstall(x, "تم الاستبدال"); });
 }
+const MISSING = "هذه النسخة من البرنامج ينقصها ملفات الساوندات (main/preload/v4/sounds.js/lib). انسخ ملفات الحزمة كاملة ثم أعد بناء البرنامج وثبّته من جديد";
 document.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return;
+    try { await onClick(b); } catch (err) { const m = String((err && err.message) || err || ""); console.error(err); toast(/No handler|not a function|undefined/i.test(m) ? MISSING : "خطأ: " + m, "error", 7000); }
+});
+async function onClick(b) {
     if (b.id === "bDetect") { await loadGta(true); await refresh(); }
     else if (b.id === "bPick") { const r = await window.api.gta.select(); if (r && r.success) { await loadGta(false); await refresh(); toast("تم حفظ المسار", "success"); } else if (r && r.message) toast(r.message, "error"); }
     else if (b.id === "bLocal") { const r = await window.api.gta.installLocal(); await afterInstall(r, "تم التثبيت"); }
@@ -58,9 +63,10 @@ document.addEventListener("click", async (e) => {
         const id = b.closest("[data-id]").dataset.id; const s = LIB.find((x) => x.id === id); if (!s || busy) return;
         if (!G || !G.success) { toast("حدّد مسار GTA V أولاً", "error"); return; }
         busy = id; renderLib();
-        const r = await window.api.lib.install({ type: "sound", id }); busy = null; await afterInstall(r, "تم تركيب الساوند");
+        let r; try { r = await window.api.lib.install({ type: "sound", id }); } finally { busy = null; }
+        await afterInstall(r, "تم تركيب الساوند");
     }
-});
+}
 $("tabsS").addEventListener("click", (e) => { const b = e.target.closest("[data-t]"); if (!b) return; document.querySelectorAll("#tabsS .cchip").forEach((x) => x.classList.toggle("on", x === b)); $("pLib").classList.toggle("hidden", b.dataset.t !== "lib"); $("pMine").classList.toggle("hidden", b.dataset.t !== "mine"); });
 window.api.onDownloadProgress?.((d) => { const b = $("bar"), t = $("dtxt"); if (b) b.style.width = d.percent + "%"; if (t) t.textContent = `${d.percent}%` + (d.speed && d.speed !== "0" ? ` · ${d.speed} MB/s` : ""); });
 window.api.onInstallStatus?.((d) => { const t = $("dtxt"); if (t && d.msg) t.textContent = d.msg; });
@@ -69,7 +75,7 @@ window.api.onInstallStatus?.((d) => { const t = $("dtxt"); if (t && d.msg) t.tex
         const S = await Promise.race([window.CA.ready, new Promise((r) => setTimeout(() => r("timeout"), 12000))]);
         if (!S || S === "timeout") { $("gtaBox").innerHTML = `<div class="empty"><p>تعذّر تحميل الجلسة. أعد فتح الصفحة.</p></div>`; return; }
         try { await Promise.race([loadGta(false), new Promise((_, j) => setTimeout(() => j(new Error("انتهت مهلة البحث عن اللعبة")), 20000))]); }
-        catch (e) { G = { success: false, message: (e && e.message) || "تعذّر البحث عن اللعبة" }; gtaBox(); }
+        catch (e) { G = { success: false, message: (/No handler/i.test(e && e.message) ? MISSING : (e && e.message)) || "تعذّر البحث عن اللعبة" }; gtaBox(); }
         try { const L = await window.CA.getLibrary(true); LIB = (L && L.success && L.sounds) || []; } catch { LIB = []; }
         renderLib(); renderMine();
     } catch (e) {

@@ -1,6 +1,6 @@
 {
   "name": "ca-graphics-app",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "description": "CA Store Graphics Installer",
   "main": "main.js",
   "scripts": {
